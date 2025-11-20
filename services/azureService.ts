@@ -18,6 +18,13 @@ export const connectAndFetch = async (
   config: AzureConnectionConfig,
   onDataUpdate?: (data: TopologyData) => void
 ): Promise<TopologyData> => {
+  console.log('connectAndFetch called with config:', {
+    tenantId: config.tenantId,
+    clientId: config.clientId,
+    subscriptionId: config.subscriptionId,
+    hasProxyUrl: !!config.proxyUrl
+  });
+
   try {
     // 1. Authenticate - Get Access Token
     const token = await getAccessToken(config);
@@ -27,6 +34,8 @@ export const connectAndFetch = async (
 
     // 3. Transform Data to Topology
     const topology = transformResourcesToTopology(resources, config.subscriptionId);
+
+    console.log('Topology created with subscriptionId:', topology.subscriptionId);
 
     // 4. Enrich with Cost Data (async, don't block, with timeout)
     Promise.race([
