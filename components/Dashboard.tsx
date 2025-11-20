@@ -5,18 +5,24 @@ import {
 } from 'recharts';
 import { TopologyData, ResourceType } from '../types';
 import CostTableModal from './CostTableModal';
+import MonthAnalysisModal from './MonthAnalysisModal';
 
 interface DashboardProps {
     data: TopologyData;
     onAnalysisUpdate?: (analysis: { cost: any, security: any }) => void;
     onDateRangeChange?: (startDate: Date, endDate: Date) => void;
+    onViewSecurity?: () => void;
+    onViewCost?: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRangeChange }) => {
+const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRangeChange, onViewSecurity, onViewCost }) => {
     const [costData, setCostData] = React.useState<any>(data.analysis?.cost || null);
     const [securityData, setSecurityData] = React.useState<any>(data.analysis?.security || null);
     const [loadingAnalysis, setLoadingAnalysis] = React.useState(false);
     const [isCostModalOpen, setIsCostModalOpen] = React.useState(false);
+    const [monthAnalysis, setMonthAnalysis] = React.useState<{ isOpen: boolean, month: string, cost: number, currency: string }>({
+        isOpen: false, month: '', cost: 0, currency: ''
+    });
 
     React.useEffect(() => {
         // If analysis is already present in data, use it and don't fetch
@@ -56,18 +62,18 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
     const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const monthsBack = parseInt(e.target.value);
         const now = new Date();
-        // Calculate start/end for that month (0 = last month, 1 = month before that)
-        // new Date(y, m, 0) is the last day of the previous month 'm'
-        // So if we want "Last Month", we want month 'now.getMonth()'.
-        // The 0th day of 'now.getMonth()' is the last day of 'now.getMonth() - 1'.
 
-        // Example: Now is Nov (10).
-        // monthsBack = 0. Target: Oct.
-        // End: new Date(2023, 10, 0) -> Oct 31.
-        // Start: new Date(2023, 9, 1) -> Oct 1.
+        // 0 = Current Month
+        // 1 = Last Month
 
-        const end = new Date(now.getFullYear(), now.getMonth() - monthsBack, 0);
-        const start = new Date(end.getFullYear(), end.getMonth(), 1);
+        // Start of the target month:
+        // If monthsBack = 0 (Current), we want 1st of this month.
+        const start = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
+
+        // End of the target month:
+        // If monthsBack = 0 (Current), we want last day of this month.
+        // new Date(y, m + 1, 0) gives last day of month m.
+        const end = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1, 0);
 
         if (onDateRangeChange) {
             onDateRangeChange(start, end);
@@ -125,13 +131,14 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
                         <select
                             className="bg-slate-900 border border-slate-600 text-xs rounded p-1 text-slate-300 focus:border-blue-500 outline-none"
                             onChange={handleMonthChange}
+                            defaultValue="0"
                         >
-                            <option value="0">Last Month</option>
-                            <option value="1">2 Months Ago</option>
-                            <option value="2">3 Months Ago</option>
-                            <option value="3">4 Months Ago</option>
-                            <option value="4">5 Months Ago</option>
-                            <option value="5">6 Months Ago</option>
+                            <option value="0">Current Month</option>
+                            <option value="1">Last Month</option>
+                            <option value="2">2 Months Ago</option>
+                            <option value="3">3 Months Ago</option>
+                            <option value="4">4 Months Ago</option>
+                            <option value="5">5 Months Ago</option>
                         </select>
                     </div>
                     {actualTotalCost > 0 ? (
@@ -154,8 +161,16 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
                     )}
                 </div>
 
-                <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                    <h3 className="text-slate-400 text-sm uppercase font-bold mb-1">Security Score</h3>
+                <div
+                    className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg cursor-pointer hover:border-blue-500 transition-colors"
+                    onClick={onViewSecurity}
+                >
+                    <div className="flex justify-between items-start">
+                        <h3 className="text-slate-400 text-sm uppercase font-bold mb-1">Security Score</h3>
+                        <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                    </div>
                     {loadingAnalysis ? (
                         <div className="animate-pulse h-10 w-32 bg-slate-700 rounded mt-1"></div>
                     ) : (
@@ -174,17 +189,28 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
             {/* Cost Trend Chart */}
             {costTrendData.length > 0 && (
                 <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg mb-8 h-80">
-                    <h3 className="text-white font-semibold mb-4">Yearly Cost Trend (Amortized)</h3>
+                    <h3 className="text-white font-semibold mb-4">Yearly Cost Trend (Amortized) - Click bar for analysis</h3>
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={costTrendData}>
+                        <BarChart data={costTrendData} onClick={(data: any) => {
+                            if (data && data.activePayload && data.activePayload.length > 0) {
+                                const payload = data.activePayload[0].payload;
+                                setMonthAnalysis({
+                                    isOpen: true,
+                                    month: payload.name,
+                                    cost: payload.cost,
+                                    currency: currencySymbol
+                                });
+                            }
+                        }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                             <XAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#94a3b8' }} axisLine={{ stroke: '#475569' }} />
                             <YAxis stroke="#94a3b8" tick={{ fill: '#94a3b8' }} axisLine={{ stroke: '#475569' }} tickFormatter={(val) => `${currencySymbol}${val}`} />
                             <RechartsTooltip
                                 contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
                                 formatter={(value: number) => [`${currencySymbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 'Cost']}
+                                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                             />
-                            <Bar dataKey="cost" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="cost" fill="#3b82f6" radius={[4, 4, 0, 0]} cursor="pointer" />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -236,14 +262,22 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
             {/* AI Insights */}
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Cost Insights */}
-                <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                    <div className="flex items-center gap-2 mb-4">
-                        <div className="p-2 bg-blue-500/20 rounded-lg">
-                            <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
+                <div
+                    className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg cursor-pointer hover:border-blue-500 transition-colors"
+                    onClick={onViewCost}
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <div className="p-2 bg-blue-500/20 rounded-lg">
+                                <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                            </div>
+                            <h3 className="text-white font-semibold">Cost Insights</h3>
                         </div>
-                        <h3 className="text-white font-semibold">Cost Insights</h3>
+                        <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
                     </div>
                     {loadingAnalysis ? (
                         <div className="space-y-2">
@@ -306,6 +340,14 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
                 items={data.rawCostItems || []}
                 totalCost={actualTotalCost}
                 currency={currencySymbol}
+            />
+
+            <MonthAnalysisModal
+                isOpen={monthAnalysis.isOpen}
+                onClose={() => setMonthAnalysis(prev => ({ ...prev, isOpen: false }))}
+                month={monthAnalysis.month}
+                cost={monthAnalysis.cost}
+                currency={monthAnalysis.currency}
             />
         </div>
     );

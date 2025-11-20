@@ -74,7 +74,16 @@ const costAnalysisSchema = {
     summary: { type: Type.STRING },
     topCostDrivers: {
       type: Type.ARRAY,
-      items: { type: Type.STRING }
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          resourceName: { type: Type.STRING },
+          cost: { type: Type.NUMBER },
+          reason: { type: Type.STRING },
+          optimizationSuggestion: { type: Type.STRING }
+        },
+        required: ['resourceName', 'cost', 'reason', 'optimizationSuggestion']
+      }
     }
   },
   required: ['estimatedMonthlyCost', 'currency', 'potentialSavings', 'summary']
@@ -88,11 +97,32 @@ const securityAnalysisSchema = {
     summary: { type: Type.STRING },
     topRisks: {
       type: Type.ARRAY,
-      items: { type: Type.STRING }
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          risk: { type: Type.STRING },
+          severity: { type: Type.STRING, enum: ['Critical', 'High', 'Medium', 'Low'] },
+          remediation: { type: Type.STRING },
+          affectedResource: { type: Type.STRING }
+        },
+        required: ['risk', 'severity', 'remediation', 'affectedResource']
+      }
     }
   },
   required: ['securityScore', 'criticalRisksCount', 'summary']
 };
+
+const simplifyTopology = (topology: TopologyData) => ({
+  nodes: topology.nodes.map(n => ({
+    id: n.id,
+    type: n.type,
+    name: n.name,
+    status: n.status,
+    location: n.location,
+    isPublic: n.properties?.publicIp ? true : false
+  })),
+  links: topology.links
+});
 
 export const generateCostAnalysis = async (topology: TopologyData): Promise<any> => {
   if (!apiKey) return { estimatedMonthlyCost: 0, currency: 'USD', summary: 'API Key missing', potentialSavings: 0 };
@@ -133,32 +163,39 @@ export const generateSecurityAnalysis = async (topology: TopologyData): Promise<
 
   try {
     // Simplify topology for security analysis - remove cost items
-    const payload = {
-      nodes: topology.nodes.map(n => ({
-        id: n.id,
-        type: n.type,
-        name: n.name,
-        status: n.status,
-        location: n.location,
-        isPublic: n.properties?.publicIp ? true : false // Heuristic
-      })),
-      links: topology.links
-    };
-
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `Analyze the security posture of this Azure infrastructure: ${JSON.stringify(payload)}. 
-            Calculate a security score (0-100). Identify critical risks (e.g. public IPs, unencrypted data, missing firewalls).`,
+      contents: `Analyze the security posture of this Azure infrastructure: ${JSON.stringify(simplifyTopology(topology))}.
+      Identify critical risks (e.g. open ports, unencrypted data, public access).
+      Provide a security score (0-100).
+      List top 3 critical risks with remediation steps.`,
       config: {
         responseMimeType: "application/json",
-        responseSchema: securityAnalysisSchema,
-        systemInstruction: "You are an Azure Security expert (CISSP). Evaluate the topology strictly."
+        responseSchema: securityAnalysisSchema
       }
     });
+
     return JSON.parse(response.text || '{}');
   } catch (error) {
-    console.error("Security Analysis Error:", error);
-    return { securityScore: 0, criticalRisksCount: 0, summary: 'Analysis Failed' };
+    console.error("Gemini Security Analysis Error:", error);
+    return { securityScore: 0, criticalRisksCount: 0, summary: 'Analysis failed' };
+  }
+};
+
+export const generateMonthAnalysis = async (month: string, cost: number, currency: string): Promise<string> => {
+  if (!apiKey) return "API Key missing. Cannot generate analysis.";
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `Analyze the monthly cloud cost of ${currency}${cost} for ${month}. 
+      Provide a technical, concise summary of what typically drives costs in this range for an Azure environment. 
+      Mention potential seasonal factors or common anomalies for this time of year.
+      Format the output as if it were a system log or terminal output.`
+    });
+    return response.text || "No analysis generated.";
+  } catch (e) {
+    return "Analysis failed.";
   }
 };
 

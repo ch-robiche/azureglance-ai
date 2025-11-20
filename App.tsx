@@ -9,12 +9,16 @@ import Dashboard from './components/Dashboard';
 import AIChatPanel from './components/AIChatPanel';
 import ConnectModal from './components/ConnectModal';
 import DevConsole from './components/DevConsole';
+import SecurityPage from './components/SecurityPage';
+import CostAnalysisPage from './components/CostAnalysisPage';
 
 
 enum View {
   DASHBOARD = 'dashboard',
   TOPOLOGY = 'topology',
-  ALERTS = 'alerts' // Placeholder
+  ALERTS = 'alerts', // Placeholder
+  SECURITY = 'security',
+  COST = 'cost'
 }
 
 const App: React.FC = () => {
@@ -192,7 +196,15 @@ const App: React.FC = () => {
               data={topologyData}
               onAnalysisUpdate={(analysis) => setTopologyData(prev => ({ ...prev, analysis }))}
               onDateRangeChange={handleDateRangeChange}
+              onViewSecurity={() => setCurrentView(View.SECURITY)}
+              onViewCost={() => setCurrentView(View.COST)}
             />
+          )}
+          {currentView === View.SECURITY && (
+            <SecurityPage data={topologyData} onBack={() => setCurrentView(View.DASHBOARD)} />
+          )}
+          {currentView === View.COST && (
+            <CostAnalysisPage data={topologyData} onBack={() => setCurrentView(View.DASHBOARD)} />
           )}
 
           {/* Floating Details Panel */}
