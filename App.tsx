@@ -11,6 +11,10 @@ import ConnectModal from './components/ConnectModal';
 import DevConsole from './components/DevConsole';
 import SecurityPage from './components/SecurityPage';
 import CostAnalysisPage from './components/CostAnalysisPage';
+import { LoginPage } from './components/LoginPage';
+import { AdminPanel } from './components/AdminPanel';
+import { HistoryModal } from './components/HistoryModal';
+import { api } from './services/api';
 
 
 enum View {
@@ -22,6 +26,11 @@ enum View {
 }
 
 const App: React.FC = () => {
+  const [token, setToken] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+
   const [currentView, setCurrentView] = useState<View>(View.TOPOLOGY);
   const [topologyData, setTopologyData] = useState<TopologyData>(DEFAULT_TOPOLOGY);
   const [selectedNode, setSelectedNode] = useState<TopologyNode | null>(null);
@@ -33,6 +42,10 @@ const App: React.FC = () => {
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionConfig, setConnectionConfig] = useState<AzureConnectionConfig | null>(null);
+
+  if (!token) {
+    return <LoginPage onLogin={(t, r) => { setToken(t); setRole(r); }} />;
+  }
 
   const handleGenerate = async () => {
     if (!promptInput.trim()) return;
@@ -78,6 +91,22 @@ const App: React.FC = () => {
     } catch (error) {
       console.error("Failed to update costs:", error);
     }
+  };
+
+  const handleSaveAnalysis = async (type: string, data: any) => {
+    if (!token) return;
+    try {
+      await api.saveAnalysis(token, type, data);
+      alert('Analysis saved!');
+    } catch (e) {
+      alert('Failed to save analysis');
+    }
+  };
+
+  const handleLoadAnalysis = (data: any) => {
+    // Load the analysis data into the topology
+    setTopologyData(prev => ({ ...prev, analysis: data }));
+    setCurrentView(View.DASHBOARD);
   };
 
   return (
@@ -133,6 +162,7 @@ const App: React.FC = () => {
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
           </button>
         </nav>
+        {/* Add Logout/Admin to Sidebar bottom? Or Header? Header is better for now */}
       </aside>
 
       {/* Main Content */}
@@ -161,6 +191,21 @@ const App: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4 flex-1 justify-end">
+            <button onClick={() => setIsHistoryModalOpen(true)} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium text-slate-300 transition-colors flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              History
+            </button>
+            {role === 'admin' && (
+              <button onClick={() => setIsAdminPanelOpen(true)} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium text-slate-300 transition-colors">
+                Admin
+              </button>
+            )}
+            <button onClick={() => { setToken(null); setRole(null); }} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium text-slate-300 transition-colors">
+              Logout
+            </button>
+
             {!isConnected && (
               <button
                 onClick={() => setIsConnectModalOpen(true)}
@@ -212,6 +257,7 @@ const App: React.FC = () => {
               data={topologyData}
               onAnalysisUpdate={(analysis) => setTopologyData(prev => ({ ...prev, analysis }))}
               onDateRangeChange={handleDateRangeChange}
+              onSaveAnalysis={handleSaveAnalysis}
             />
           )}
           {currentView === View.SECURITY && (
@@ -242,7 +288,19 @@ const App: React.FC = () => {
         isOpen={isConnectModalOpen}
         onClose={() => setIsConnectModalOpen(false)}
         onConnect={handleConnect}
+        token={token}
       />
+
+      {isAdminPanelOpen && token && <AdminPanel token={token} onClose={() => setIsAdminPanelOpen(false)} />}
+
+      {isHistoryModalOpen && token && (
+        <HistoryModal
+          isOpen={isHistoryModalOpen}
+          onClose={() => setIsHistoryModalOpen(false)}
+          token={token}
+          onLoadAnalysis={handleLoadAnalysis}
+        />
+      )}
 
       {/* Dev Console */}
       <DevConsole />

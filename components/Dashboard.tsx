@@ -11,9 +11,10 @@ interface DashboardProps {
     data: TopologyData;
     onAnalysisUpdate?: (analysis: { cost: any, security: any }) => void;
     onDateRangeChange?: (startDate: Date, endDate: Date) => void;
+    onSaveAnalysis?: (type: string, data: any) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRangeChange }) => {
+const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRangeChange, onSaveAnalysis }) => {
     const [costData, setCostData] = React.useState<any>(data.analysis?.cost || null);
     const [securityData, setSecurityData] = React.useState<any>(data.analysis?.security || null);
     const [loadingAnalysis, setLoadingAnalysis] = React.useState(false);
@@ -119,7 +120,20 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
 
     return (
         <div className="h-full p-6 overflow-y-auto bg-slate-900">
-            <h2 className="text-2xl font-bold text-white mb-6">Infrastructure Overview</h2>
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-white">Infrastructure Overview</h2>
+                {onSaveAnalysis && (costData || securityData) && (
+                    <button
+                        onClick={() => onSaveAnalysis('dashboard', { cost: costData, security: securityData })}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                        </svg>
+                        Save Analysis
+                    </button>
+                )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
