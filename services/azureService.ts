@@ -125,7 +125,8 @@ const enrichTopologyWithCosts = async (topology: TopologyData, token: string, co
     });
 
     if (!response.ok) {
-      console.warn('Cost query failed:', response.statusText);
+      const errorText = await response.text();
+      console.warn('Cost query failed:', response.status, errorText);
       return;
     }
 
@@ -143,16 +144,34 @@ const enrichTopologyWithCosts = async (topology: TopologyData, token: string, co
       });
     }
 
+    console.log(`Fetched costs for ${costMap.size} resources`);
+
     // Update topology nodes with cost data
     topology.nodes.forEach(node => {
-      const cost = costMap.get(node.id.toLowerCase());
-      if (cost !== undefined) {
+      const nodeIdLower = node.id.toLowerCase();
+      let cost = costMap.get(nodeIdLower);
+
+      // If no direct match, try to find parent resource cost
+      // (e.g., VM extensions inherit VM cost)
+      if (!cost) {
+        // Try to extract parent resource ID (remove last segment)
+        const parts = nodeIdLower.split('/');
+        if (parts.length > 2) {
+          const parentId = parts.slice(0, -2).join('/');
+          cost = costMap.get(parentId);
+        }
+      }
+
+      if (cost !== undefined && cost > 0) {
         node.cost = `$${cost.toFixed(2)}`;
+      } else if (node.type !== ResourceType.SUBSCRIPTION && node.type !== ResourceType.RESOURCE_GROUP) {
+        // Only mark as $0.00 for actual resources, not containers
+        node.cost = '$0.00';
       }
     });
 
-  } catch (error) {
-    console.warn('Error enriching with costs:', error);
+  } catch (error: any) {
+    console.warn('Error enriching with costs:', error.message || error);
   }
 };
 

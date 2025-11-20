@@ -46,8 +46,8 @@ const DetailsPanel: React.FC<DetailsPanelProps> = ({ node, alerts, onClose }) =>
           <div>
             <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Status</label>
             <div className={`text-sm font-bold ${node.status === 'Running' ? 'text-green-400' :
-                node.status === 'Degraded' ? 'text-red-400' :
-                  'text-blue-400'
+              node.status === 'Degraded' ? 'text-red-400' :
+                'text-blue-400'
               }`}>{node.status}</div>
           </div>
           <div>
@@ -56,7 +56,11 @@ const DetailsPanel: React.FC<DetailsPanelProps> = ({ node, alerts, onClose }) =>
           </div>
           <div>
             <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Monthly Cost</label>
-            <div className="text-slate-200 text-sm">{node.cost || 'N/A'}</div>
+            <div className="text-slate-200 text-sm">
+              {node.cost || (
+                <span className="text-slate-500 italic text-xs">Loading...</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -68,8 +72,8 @@ const DetailsPanel: React.FC<DetailsPanelProps> = ({ node, alerts, onClose }) =>
             <div className="space-y-2">
               {nodeAlerts.map(alert => (
                 <div key={alert.id} className={`p-3 rounded border ${alert.severity === 'Critical' ? 'bg-red-900/20 border-red-800 text-red-200' :
-                    alert.severity === 'Warning' ? 'bg-amber-900/20 border-amber-800 text-amber-200' :
-                      'bg-blue-900/20 border-blue-800 text-blue-200'
+                  alert.severity === 'Warning' ? 'bg-amber-900/20 border-amber-800 text-amber-200' :
+                    'bg-blue-900/20 border-blue-800 text-blue-200'
                   }`}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-bold">{alert.severity}</span>
