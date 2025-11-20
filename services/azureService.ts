@@ -23,7 +23,14 @@ export const connectAndFetch = async (config: AzureConnectionConfig): Promise<To
     const resources = await fetchAzureResources(token, config);
 
     // 3. Transform Data to Topology
-    return transformResourcesToTopology(resources, config.subscriptionId);
+    const topology = transformResourcesToTopology(resources, config.subscriptionId);
+
+    // 4. Enrich with Cost Data (async, don't block)
+    enrichTopologyWithCosts(topology, token, config).catch(err =>
+      console.warn('Failed to fetch cost data:', err)
+    );
+
+    return topology;
   } catch (error: any) {
     console.warn("Azure Connection Failed (Likely CORS or Auth). Switching to Simulation Mode.", error);
 
@@ -70,6 +77,83 @@ const getAccessToken = async (config: AzureConnectionConfig): Promise<string> =>
 
   const data = await response.json();
   return data.access_token;
+};
+
+const enrichTopologyWithCosts = async (topology: TopologyData, token: string, config: AzureConnectionConfig): Promise<void> => {
+  if (!config.subscriptionId) return;
+
+  try {
+    // Query Azure Cost Management API for current month costs by resource
+    const targetUrl = `https://management.azure.com/subscriptions/${config.subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2023-03-01`;
+    const url = getProxiedUrl(targetUrl, config.proxyUrl);
+
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    const costQuery = {
+      type: "ActualCost",
+      timeframe: "Custom",
+      timePeriod: {
+        from: firstDay.toISOString().split('T')[0],
+        to: lastDay.toISOString().split('T')[0]
+      },
+      dataset: {
+        granularity: "None",
+        aggregation: {
+          totalCost: {
+            name: "Cost",
+            function: "Sum"
+          }
+        },
+        grouping: [
+          {
+            type: "Dimension",
+            name: "ResourceId"
+          }
+        ]
+      }
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(costQuery)
+    });
+
+    if (!response.ok) {
+      console.warn('Cost query failed:', response.statusText);
+      return;
+    }
+
+    const costData = await response.json();
+
+    // Map costs to resources
+    const costMap = new Map<string, number>();
+    if (costData.properties?.rows) {
+      costData.properties.rows.forEach((row: any[]) => {
+        const cost = row[0]; // Cost value
+        const resourceId = row[1]?.toLowerCase(); // Resource ID
+        if (resourceId && cost > 0) {
+          costMap.set(resourceId, cost);
+        }
+      });
+    }
+
+    // Update topology nodes with cost data
+    topology.nodes.forEach(node => {
+      const cost = costMap.get(node.id.toLowerCase());
+      if (cost !== undefined) {
+        node.cost = `$${cost.toFixed(2)}`;
+      }
+    });
+
+  } catch (error) {
+    console.warn('Error enriching with costs:', error);
+  }
 };
 
 const fetchAzureResources = async (token: string, config: AzureConnectionConfig): Promise<AzureRawResource[]> => {
@@ -130,10 +214,23 @@ const transformResourcesToTopology = (resources: AzureRawResource[], rootSubId: 
         type: ResourceType.RESOURCE_GROUP,
         group: subNodeId,
         status: 'OK',
-        val: 20
+        val: 20,
+        location: res.location
       });
       links.push({ source: subNodeId, target: rgId, type: 'contains' });
       addedGroups.add(rgName);
+    }
+
+    // Determine status from properties if available
+    let status: 'Running' | 'Stopped' | 'Degraded' | 'OK' = 'Running';
+    if (res.properties?.provisioningState === 'Failed') {
+      status = 'Degraded';
+    } else if (res.properties?.powerState?.includes('stopped')) {
+      status = 'Stopped';
+    } else if (internalType === ResourceType.VM && res.properties?.powerState) {
+      status = res.properties.powerState.includes('running') ? 'Running' : 'Stopped';
+    } else if ([ResourceType.VNET, ResourceType.SUBNET, ResourceType.RESOURCE_GROUP, ResourceType.SUBSCRIPTION].includes(internalType)) {
+      status = 'OK';
     }
 
     nodes.push({
@@ -141,8 +238,10 @@ const transformResourcesToTopology = (resources: AzureRawResource[], rootSubId: 
       name: res.name,
       type: internalType,
       group: rgId,
-      status: 'Running',
-      val: 10
+      status: status,
+      val: 10,
+      location: res.location,
+      properties: res.properties
     });
 
     links.push({ source: rgId, target: res.id, type: 'contains' });
@@ -187,13 +286,13 @@ const generateSimulatedTopology = (subId: string): TopologyData => {
   links.push({ source: vnetProd, target: subData, type: 'contains' });
 
   // Resources
-  nodes.push({ id: 'vm-prod-01', name: 'VM-Web-01', type: ResourceType.VM, group: subWeb, status: 'Running', val: 10 } as TopologyNode);
+  nodes.push({ id: 'vm-prod-01', name: 'VM-Web-01', type: ResourceType.VM, group: subWeb, status: 'Running', val: 10, location: 'eastus', cost: '$145.20' } as TopologyNode);
   links.push({ source: subWeb, target: 'vm-prod-01', type: 'contains' });
 
-  nodes.push({ id: 'vm-prod-02', name: 'VM-Web-02', type: ResourceType.VM, group: subWeb, status: 'Running', val: 10 } as TopologyNode);
+  nodes.push({ id: 'vm-prod-02', name: 'VM-Web-02', type: ResourceType.VM, group: subWeb, status: 'Running', val: 10, location: 'eastus', cost: '$145.20' } as TopologyNode);
   links.push({ source: subWeb, target: 'vm-prod-02', type: 'contains' });
 
-  nodes.push({ id: 'sql-primary', name: 'SQL-Primary', type: ResourceType.SQL, group: subData, status: 'OK', val: 12 } as TopologyNode);
+  nodes.push({ id: 'sql-primary', name: 'SQL-Primary', type: ResourceType.SQL, group: subData, status: 'OK', val: 12, location: 'eastus', cost: '$320.50' } as TopologyNode);
   links.push({ source: subData, target: 'sql-primary', type: 'contains' });
 
   // Connections
@@ -203,13 +302,13 @@ const generateSimulatedTopology = (subId: string): TopologyData => {
   // Structure 2: Shared Services
   const rgShared = createRG('RG-Shared-Services');
   const vnetHub = createVNet(rgShared, 'VNet-Hub');
-  nodes.push({ id: 'fw-hub', name: 'Azure-Firewall', type: ResourceType.FIREWALL, group: vnetHub, status: 'OK', val: 18 } as TopologyNode);
+  nodes.push({ id: 'fw-hub', name: 'Azure-Firewall', type: ResourceType.FIREWALL, group: vnetHub, status: 'OK', val: 18, location: 'eastus', cost: '$1,250.00' } as TopologyNode);
   links.push({ source: vnetHub, target: 'fw-hub', type: 'contains' });
 
   // Structure 3: Legacy with issues
   const rgLegacy = createRG('RG-Legacy-Apps', 'Degraded');
   const vnetLegacy = createVNet(rgLegacy, 'VNet-Legacy');
-  nodes.push({ id: 'vm-legacy-01', name: 'VM-Legacy', type: ResourceType.VM, group: vnetLegacy, status: 'Degraded', val: 10 } as TopologyNode);
+  nodes.push({ id: 'vm-legacy-01', name: 'VM-Legacy', type: ResourceType.VM, group: vnetLegacy, status: 'Degraded', val: 10, location: 'westus', cost: '$89.40' } as TopologyNode);
   links.push({ source: vnetLegacy, target: 'vm-legacy-01', type: 'contains' });
 
   // Peering

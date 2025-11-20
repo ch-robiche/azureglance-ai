@@ -31,6 +31,9 @@ export interface TopologyNode {
   group: string; // Usually Resource Group Name
   status: 'Running' | 'Stopped' | 'Degraded' | 'OK';
   val: number; // For sizing
+  location?: string;
+  cost?: string;
+  properties?: any;
   // d3-force specific properties
   index?: number;
   x?: number;
