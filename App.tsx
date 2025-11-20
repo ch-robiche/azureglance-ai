@@ -9,6 +9,7 @@ import DetailsPanel from './components/DetailsPanel';
 import Dashboard from './components/Dashboard';
 import AIChatPanel from './components/AIChatPanel';
 import ConnectModal from './components/ConnectModal';
+import DevConsole from './components/DevConsole';
 
 enum View {
   DASHBOARD = 'dashboard',
@@ -202,6 +203,9 @@ const App: React.FC = () => {
         onClose={() => setIsConnectModalOpen(false)}
         onConnect={handleConnect}
       />
+
+      {/* Dev Console */}
+      <DevConsole />
     </div>
   );
 };

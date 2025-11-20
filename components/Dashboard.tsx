@@ -89,14 +89,14 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
                 </div>
 
                 <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg relative overflow-hidden">
-                    <h3 className="text-slate-400 text-sm uppercase font-bold mb-1">Actual Monthly Cost</h3>
+                    <h3 className="text-slate-400 text-sm uppercase font-bold mb-1">Monthly Cost</h3>
                     {actualTotalCost > 0 ? (
                         <>
                             <div className="text-4xl font-bold text-white">
                                 ${actualTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                             <div className="text-slate-400 text-sm mt-2">
-                                From Azure Cost Management
+                                Last month (Azure Cost Mgmt)
                             </div>
                         </>
                     ) : (

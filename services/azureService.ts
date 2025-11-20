@@ -125,15 +125,16 @@ const enrichTopologyWithCosts = async (topology: TopologyData, token: string, co
     console.log('Cost API URL:', url);
 
     const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    // Get last complete month for more accurate monthly cost representation
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
 
     const costQuery = {
       type: "ActualCost",
       timeframe: "Custom",
       timePeriod: {
-        from: firstDay.toISOString().split('T')[0],
-        to: lastDay.toISOString().split('T')[0]
+        from: lastMonthStart.toISOString().split('T')[0],
+        to: lastMonthEnd.toISOString().split('T')[0]
       },
       dataset: {
         granularity: "None",
@@ -169,6 +170,14 @@ const enrichTopologyWithCosts = async (topology: TopologyData, token: string, co
 
     const costData = await response.json();
 
+    console.log('Cost API Response structure:', {
+      hasProperties: !!costData.properties,
+      hasRows: !!costData.properties?.rows,
+      rowCount: costData.properties?.rows?.length || 0,
+      columns: costData.properties?.columns,
+      sampleRows: costData.properties?.rows?.slice(0, 5)
+    });
+
     // Map costs to resources
     const costMap = new Map<string, number>();
     if (costData.properties?.rows) {
@@ -177,6 +186,10 @@ const enrichTopologyWithCosts = async (topology: TopologyData, token: string, co
         const resourceId = row[1]?.toLowerCase(); // Resource ID
         if (resourceId && cost > 0) {
           costMap.set(resourceId, cost);
+          // Log first few entries to debug
+          if (costMap.size <= 5) {
+            console.log('Sample cost entry:', { resourceId: row[1], cost });
+          }
         }
       });
     }
