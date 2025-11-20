@@ -59,6 +59,15 @@ export interface TopologyData {
   subscriptionId?: string;
   totalCost?: number;
   currency?: string;
+  rawCostItems?: CostItem[];
+}
+
+export interface CostItem {
+  id: string;
+  name: string;
+  type: string;
+  cost: number;
+  currency: string;
 }
 
 export interface ChatMessage {

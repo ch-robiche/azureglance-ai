@@ -204,12 +204,32 @@ const enrichTopologyWithCosts = async (topology: TopologyData, token: string, co
 
     // Calculate total subscription cost from ALL resources (not just visualized ones)
     let totalSubscriptionCost = 0;
-    costMap.forEach((cost) => {
+    const rawCostItems: any[] = [];
+
+    costMap.forEach((cost, id) => {
       totalSubscriptionCost += cost;
+
+      // Extract name and type from ID
+      // ID format: /subscriptions/.../resourceGroups/RG/providers/Provider/Type/Name
+      const parts = id.split('/');
+      const name = parts[parts.length - 1] || id;
+      const type = parts.length > 2 ? parts[parts.length - 2] : 'Unknown';
+
+      rawCostItems.push({
+        id,
+        name,
+        type,
+        cost,
+        currency: currencyCode
+      });
     });
+
+    // Sort by cost descending
+    rawCostItems.sort((a, b) => b.cost - a.cost);
 
     topology.totalCost = totalSubscriptionCost;
     topology.currency = currencySymbol;
+    topology.rawCostItems = rawCostItems;
 
     console.log(`Total Subscription Cost: ${currencySymbol}${totalSubscriptionCost.toFixed(2)}`);
 
