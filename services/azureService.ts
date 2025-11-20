@@ -218,6 +218,14 @@ const enrichTopologyWithCosts = async (topology: TopologyData, token: string, co
     topology.nodes.forEach(node => {
       const lowerId = node.id.toLowerCase();
 
+      // Special handling for Subscription node: assign total cost
+      if ((node.type as ResourceType) === ResourceType.SUBSCRIPTION) {
+        node.cost = `${currencySymbol}${totalSubscriptionCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        node.location = 'Global';
+        matchedCount++;
+        return;
+      }
+
       // Direct match
       if (costMap.has(lowerId)) {
         const cost = costMap.get(lowerId);
