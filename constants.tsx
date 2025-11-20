@@ -42,7 +42,8 @@ export const DEFAULT_TOPOLOGY: TopologyData = {
     { source: 'vm-web-02', target: 'sql-prod', type: 'connects' },
     { source: 'rg-data', target: 'st-logs', type: 'contains' },
     { source: 'vm-web-01', target: 'st-logs', type: 'connects' },
-  ]
+  ],
+  subscriptionId: 'demo-subscription'
 };
 
 export const MOCK_ALERTS: Alert[] = [

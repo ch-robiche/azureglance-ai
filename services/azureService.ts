@@ -99,16 +99,18 @@ const getAccessToken = async (config: AzureConnectionConfig): Promise<string> =>
 };
 
 const enrichTopologyWithCosts = async (topology: TopologyData, token: string, config: AzureConnectionConfig): Promise<void> => {
-  if (!config.subscriptionId) {
+  const subscriptionId = topology.subscriptionId || config.subscriptionId;
+
+  if (!subscriptionId) {
     console.log('Cost enrichment skipped: no subscription ID');
     return;
   }
 
-  console.log('Starting cost enrichment for subscription:', config.subscriptionId);
+  console.log('Starting cost enrichment for subscription:', subscriptionId);
 
   try {
     // Query Azure Cost Management API for current month costs by resource
-    const targetUrl = `https://management.azure.com/subscriptions/${config.subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2023-03-01`;
+    const targetUrl = `https://management.azure.com/subscriptions/${subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2023-03-01`;
     const url = getProxiedUrl(targetUrl, config.proxyUrl);
 
     console.log('Cost API URL:', url);
@@ -292,7 +294,7 @@ const transformResourcesToTopology = (resources: AzureRawResource[], rootSubId: 
     links.push({ source: rgId, target: res.id, type: 'contains' });
   });
 
-  return { nodes, links, isSimulated: false };
+  return { nodes, links, isSimulated: false, subscriptionId: rootSubId };
 };
 
 const generateSimulatedTopology = (subId: string): TopologyData => {
@@ -360,5 +362,5 @@ const generateSimulatedTopology = (subId: string): TopologyData => {
   links.push({ source: vnetProd, target: vnetHub, type: 'connects' });
   links.push({ source: vnetLegacy, target: vnetHub, type: 'connects' });
 
-  return { nodes, links, isSimulated: true };
+  return { nodes, links, isSimulated: true, subscriptionId: subId };
 };
