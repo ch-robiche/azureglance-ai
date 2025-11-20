@@ -1,0 +1,220 @@
+
+import { AzureConnectionConfig, TopologyData, TopologyNode, TopologyLink, ResourceType, AzureRawResource } from '../types';
+
+// Map Azure Resource Types to our internal simplified types
+const mapAzureTypeToInternal = (azureType: string): ResourceType => {
+  const lower = azureType.toLowerCase();
+  if (lower.includes('microsoft.compute/virtualmachines')) return ResourceType.VM;
+  if (lower.includes('microsoft.network/virtualnetworks')) return ResourceType.VNET;
+  if (lower.includes('microsoft.network/loadbalancers')) return ResourceType.LOAD_BALANCER;
+  if (lower.includes('microsoft.network/azurefirewalls')) return ResourceType.FIREWALL;
+  if (lower.includes('microsoft.sql/servers')) return ResourceType.SQL;
+  if (lower.includes('microsoft.storage/storageaccounts')) return ResourceType.STORAGE;
+  if (lower.includes('microsoft.keyvault/vaults')) return ResourceType.KEYVAULT;
+  return ResourceType.UNKNOWN;
+};
+
+export const connectAndFetch = async (config: AzureConnectionConfig): Promise<TopologyData> => {
+  try {
+    // 1. Authenticate - Get Access Token
+    const token = await getAccessToken(config);
+
+    // 2. Query Azure Resource Graph
+    const resources = await fetchAzureResources(token, config);
+
+    // 3. Transform Data to Topology
+    return transformResourcesToTopology(resources, config.subscriptionId);
+  } catch (error: any) {
+    console.warn("Azure Connection Failed (Likely CORS or Auth). Switching to Simulation Mode.", error);
+
+    // Fallback to a generated simulation so the user can still experience the app
+    // This is necessary because browsers block direct requests to login.microsoftonline.com without a backend proxy
+    return generateSimulatedTopology(config.subscriptionId || 'demo-subscription');
+  }
+};
+
+const getProxiedUrl = (targetUrl: string, proxyUrl?: string) => {
+  // 1. If user explicitly provides a proxy (e.g. for local dev), use it.
+  if (proxyUrl) {
+    const normalizedProxy = proxyUrl.endsWith('/') ? proxyUrl : `${proxyUrl}/`;
+    return `${normalizedProxy}${targetUrl}`;
+  }
+
+  // 2. If no proxy provided, assume we are in a deployment environment (or capable one)
+  // and use our internal serverless proxy.
+  // Note: This will fail locally without 'vercel dev', which is expected.
+  // The user can use the Advanced Settings for local dev.
+  return `/api/proxy?url=${encodeURIComponent(targetUrl)}`;
+};
+
+const getAccessToken = async (config: AzureConnectionConfig): Promise<string> => {
+  const targetUrl = `https://login.microsoftonline.com/${config.tenantId}/oauth2/v2.0/token`;
+  const url = getProxiedUrl(targetUrl, config.proxyUrl);
+
+  const body = new URLSearchParams();
+  body.append('grant_type', 'client_credentials');
+  body.append('client_id', config.clientId);
+  body.append('client_secret', config.clientSecret);
+  body.append('scope', 'https://management.azure.com/.default');
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body
+  });
+
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(`Auth Failed: ${err.error_description || response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+};
+
+const fetchAzureResources = async (token: string, config: AzureConnectionConfig): Promise<AzureRawResource[]> => {
+  const targetUrl = `https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01`;
+  const url = getProxiedUrl(targetUrl, config.proxyUrl);
+
+  let query = `Resources | project id, name, type, location, resourceGroup, subscriptionId, tags, properties | limit 500`;
+
+  if (config.subscriptionId) {
+    query = `Resources | where subscriptionId == '${config.subscriptionId}' | project id, name, type, location, resourceGroup, subscriptionId, tags, properties | limit 500`;
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      query: query
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Query Failed: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.data;
+};
+
+const transformResourcesToTopology = (resources: AzureRawResource[], rootSubId: string): TopologyData => {
+  const nodes: TopologyNode[] = [];
+  const links: TopologyLink[] = [];
+  const addedGroups = new Set<string>();
+
+  const subNodeId = rootSubId || (resources[0]?.subscriptionId) || 'root-sub';
+  nodes.push({
+    id: subNodeId,
+    name: 'Subscription',
+    type: ResourceType.SUBSCRIPTION,
+    group: 'root',
+    status: 'OK',
+    val: 30
+  });
+
+  resources.forEach(res => {
+    const internalType = mapAzureTypeToInternal(res.type);
+    if (internalType === ResourceType.UNKNOWN) return;
+
+    const rgName = res.resourceGroup;
+    const rgId = `rg-${rgName.toLowerCase()}`;
+
+    if (!addedGroups.has(rgName)) {
+      nodes.push({
+        id: rgId,
+        name: rgName,
+        type: ResourceType.RESOURCE_GROUP,
+        group: subNodeId,
+        status: 'OK',
+        val: 20
+      });
+      links.push({ source: subNodeId, target: rgId, type: 'contains' });
+      addedGroups.add(rgName);
+    }
+
+    nodes.push({
+      id: res.id,
+      name: res.name,
+      type: internalType,
+      group: rgId,
+      status: 'Running',
+      val: 10
+    });
+
+    links.push({ source: rgId, target: res.id, type: 'contains' });
+  });
+
+  return { nodes, links, isSimulated: false };
+};
+
+const generateSimulatedTopology = (subId: string): TopologyData => {
+  const nodes: TopologyNode[] = [];
+  const links: TopologyLink[] = [];
+
+  // Root
+  const subNode = { id: subId, name: 'Azure Subscription (Simulated)', type: ResourceType.SUBSCRIPTION, group: 'root', status: 'OK', val: 35 } as TopologyNode;
+  nodes.push(subNode);
+
+  // Helper
+  const createRG = (name: string, status: 'OK' | 'Degraded' = 'OK') => {
+    const id = `rg-${name}`;
+    nodes.push({ id, name: name, type: ResourceType.RESOURCE_GROUP, group: subId, status, val: 25 } as TopologyNode);
+    links.push({ source: subId, target: id, type: 'contains' });
+    return id;
+  };
+
+  const createVNet = (rgId: string, name: string) => {
+    const id = `vnet-${name}`;
+    nodes.push({ id, name, type: ResourceType.VNET, group: rgId, status: 'OK', val: 20 } as TopologyNode);
+    links.push({ source: rgId, target: id, type: 'contains' });
+    return id;
+  };
+
+  // Structure 1: Production App
+  const rgProd = createRG('RG-Production-US');
+  const vnetProd = createVNet(rgProd, 'VNet-Prod');
+
+  const subWeb = `subnet-web`;
+  nodes.push({ id: subWeb, name: 'Subnet-Web', type: ResourceType.SUBNET, group: vnetProd, status: 'OK', val: 15 } as TopologyNode);
+  links.push({ source: vnetProd, target: subWeb, type: 'contains' });
+
+  const subData = `subnet-data`;
+  nodes.push({ id: subData, name: 'Subnet-Data', type: ResourceType.SUBNET, group: vnetProd, status: 'OK', val: 15 } as TopologyNode);
+  links.push({ source: vnetProd, target: subData, type: 'contains' });
+
+  // Resources
+  nodes.push({ id: 'vm-prod-01', name: 'VM-Web-01', type: ResourceType.VM, group: subWeb, status: 'Running', val: 10 } as TopologyNode);
+  links.push({ source: subWeb, target: 'vm-prod-01', type: 'contains' });
+
+  nodes.push({ id: 'vm-prod-02', name: 'VM-Web-02', type: ResourceType.VM, group: subWeb, status: 'Running', val: 10 } as TopologyNode);
+  links.push({ source: subWeb, target: 'vm-prod-02', type: 'contains' });
+
+  nodes.push({ id: 'sql-primary', name: 'SQL-Primary', type: ResourceType.SQL, group: subData, status: 'OK', val: 12 } as TopologyNode);
+  links.push({ source: subData, target: 'sql-primary', type: 'contains' });
+
+  // Connections
+  links.push({ source: 'vm-prod-01', target: 'sql-primary', type: 'connects' });
+  links.push({ source: 'vm-prod-02', target: 'sql-primary', type: 'connects' });
+
+  // Structure 2: Shared Services
+  const rgShared = createRG('RG-Shared-Services');
+  const vnetHub = createVNet(rgShared, 'VNet-Hub');
+  nodes.push({ id: 'fw-hub', name: 'Azure-Firewall', type: ResourceType.FIREWALL, group: vnetHub, status: 'OK', val: 18 } as TopologyNode);
+  links.push({ source: vnetHub, target: 'fw-hub', type: 'contains' });
+
+  // Structure 3: Legacy with issues
+  const rgLegacy = createRG('RG-Legacy-Apps', 'Degraded');
+  const vnetLegacy = createVNet(rgLegacy, 'VNet-Legacy');
+  nodes.push({ id: 'vm-legacy-01', name: 'VM-Legacy', type: ResourceType.VM, group: vnetLegacy, status: 'Degraded', val: 10 } as TopologyNode);
+  links.push({ source: vnetLegacy, target: 'vm-legacy-01', type: 'contains' });
+
+  // Peering
+  links.push({ source: vnetProd, target: vnetHub, type: 'connects' });
+  links.push({ source: vnetLegacy, target: vnetHub, type: 'connects' });
+
+  return { nodes, links, isSimulated: true };
+};

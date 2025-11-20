@@ -1,0 +1,5 @@
+{
+  "name": "AzureGlance AI",
+  "description": "A Hyperglance-inspired Azure cloud visualization tool powered by Gemini. Visualize topologies, analyze costs, and audit security using AI.",
+  "requestFramePermissions": []
+}
