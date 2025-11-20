@@ -28,8 +28,8 @@ const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose, onConnect 
     setLoading(true);
 
     // Simple validation
-    if (!config.tenantId || !config.clientId || !config.clientSecret) {
-      setError('All fields are required');
+    if (!config.tenantId || !config.clientId || !config.clientSecret || !config.subscriptionId) {
+      setError('All fields including Subscription ID are required');
       setLoading(false);
       return;
     }
@@ -113,13 +113,13 @@ const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose, onConnect 
           </div>
 
           <div>
-            <label className="block text-xs uppercase font-bold text-slate-500 mb-1">Subscription ID (Optional)</label>
+            <label className="block text-xs uppercase font-bold text-slate-500 mb-1">Subscription ID (Required)</label>
             <input
               type="text"
               value={config.subscriptionId}
               onChange={e => setConfig({ ...config, subscriptionId: e.target.value })}
               className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-blue-500 focus:outline-none text-sm font-mono transition-colors placeholder-slate-700"
-              placeholder="Leave blank to discover all available"
+              placeholder="e.g., 23ee71f8-446d-47dc-a8c9-dd54792b1cf6"
             />
           </div>
 
