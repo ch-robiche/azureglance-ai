@@ -60,6 +60,18 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
         { name: 'OK', value: statusCounts['OK'] || 0 },
     ];
 
+    // Calculate actual total monthly cost from node cost data
+    const actualTotalCost = data.nodes.reduce((total, node) => {
+        if (node.cost && node.cost !== 'Unavailable' && node.cost !== 'Loading...') {
+            // Remove $ and commas, then parse as float
+            const costValue = parseFloat(node.cost.replace(/[$,]/g, ''));
+            if (!isNaN(costValue)) {
+                return total + costValue;
+            }
+        }
+        return total;
+    }, 0);
+
     const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#6366f1'];
     const BAR_COLORS = { 'Running': '#22c55e', 'Stopped': '#94a3b8', 'Degraded': '#ef4444', 'OK': '#3b82f6' };
 
@@ -77,22 +89,18 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
                 </div>
 
                 <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg relative overflow-hidden">
-                    <h3 className="text-slate-400 text-sm uppercase font-bold mb-1">Est. Monthly Cost</h3>
-                    {loadingAnalysis ? (
-                        <div className="animate-pulse h-10 w-32 bg-slate-700 rounded mt-1"></div>
-                    ) : (
+                    <h3 className="text-slate-400 text-sm uppercase font-bold mb-1">Actual Monthly Cost</h3>
+                    {actualTotalCost > 0 ? (
                         <>
                             <div className="text-4xl font-bold text-white">
-                                {costData ? `$${costData.estimatedMonthlyCost.toLocaleString()}` : '$-'}
+                                ${actualTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                             <div className="text-slate-400 text-sm mt-2">
-                                {costData?.potentialSavings > 0 ? (
-                                    <span className="text-green-400">Potential Savings: ${costData.potentialSavings.toLocaleString()}</span>
-                                ) : (
-                                    'Optimized'
-                                )}
+                                From Azure Cost Management
                             </div>
                         </>
+                    ) : (
+                        <div className="animate-pulse h-10 w-32 bg-slate-700 rounded mt-1"></div>
                     )}
                 </div>
 
