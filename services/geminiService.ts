@@ -98,15 +98,27 @@ export const generateCostAnalysis = async (topology: TopologyData): Promise<any>
   if (!apiKey) return { estimatedMonthlyCost: 0, currency: 'USD', summary: 'API Key missing', potentialSavings: 0 };
 
   try {
+    // Create a lightweight summary to avoid token limits
+    const payload = {
+      totalCost: topology.totalCost,
+      currency: topology.currency,
+      resourceCount: topology.nodes.length,
+      // Only send top 30 most expensive items for analysis
+      topCostItems: topology.rawCostItems?.slice(0, 30) || [],
+      // Send simplified nodes for context (types and counts)
+      nodeTypes: topology.nodes.map(n => ({ type: n.type, status: n.status }))
+    };
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `Analyze the estimated monthly cost for this Azure infrastructure: ${JSON.stringify(topology)}. 
-            Estimate costs based on standard Azure pricing (e.g. VM sizes, SQL DTUs). 
-            Identify potential savings (e.g. unused resources, rightsizing).`,
+      contents: `Analyze the ACTUAL monthly cost for this Azure infrastructure: ${JSON.stringify(payload)}. 
+            The total cost is ${payload.totalCost} ${payload.currency}.
+            Analyze the provided 'topCostItems' to identify the main cost drivers.
+            Identify potential savings (e.g. suggest reservations for always-on VMs, check for unused resources).`,
       config: {
         responseMimeType: "application/json",
         responseSchema: costAnalysisSchema,
-        systemInstruction: "You are an Azure FinOps expert. Provide realistic cost estimates."
+        systemInstruction: "You are an Azure FinOps expert. Analyze the provided ACTUAL cost data. Do not estimate from scratch, use the provided totals."
       }
     });
     return JSON.parse(response.text || '{}');
@@ -120,9 +132,22 @@ export const generateSecurityAnalysis = async (topology: TopologyData): Promise<
   if (!apiKey) return { securityScore: 0, criticalRisksCount: 0, summary: 'API Key missing' };
 
   try {
+    // Simplify topology for security analysis - remove cost items
+    const payload = {
+      nodes: topology.nodes.map(n => ({
+        id: n.id,
+        type: n.type,
+        name: n.name,
+        status: n.status,
+        location: n.location,
+        isPublic: n.properties?.publicIp ? true : false // Heuristic
+      })),
+      links: topology.links
+    };
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `Analyze the security posture of this Azure infrastructure: ${JSON.stringify(topology)}. 
+      contents: `Analyze the security posture of this Azure infrastructure: ${JSON.stringify(payload)}. 
             Calculate a security score (0-100). Identify critical risks (e.g. public IPs, unencrypted data, missing firewalls).`,
       config: {
         responseMimeType: "application/json",
