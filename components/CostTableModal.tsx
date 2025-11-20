@@ -139,10 +139,10 @@ const CostTableModal: React.FC<CostTableModalProps> = ({ isOpen, onClose, items,
 
                 {/* Footer */}
                 <div className="p-4 border-t border-slate-800 bg-slate-900 text-xs text-slate-500 text-center">
-                    Data sourced from Azure Cost Management (Last Month)
+                    Data sourced from Azure Cost Management
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

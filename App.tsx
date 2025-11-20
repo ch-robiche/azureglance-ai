@@ -1,15 +1,15 @@
-
 import React, { useState, useCallback } from 'react';
 import { TopologyData, TopologyNode, AzureConnectionConfig } from './types';
 import { DEFAULT_TOPOLOGY, MOCK_ALERTS } from './constants';
 import { generateTopologyFromPrompt } from './services/geminiService';
-import { connectAndFetch } from './services/azureService';
+import { connectAndFetch, updateCosts } from './services/azureService';
 import TopologyMap from './components/TopologyMap';
 import DetailsPanel from './components/DetailsPanel';
 import Dashboard from './components/Dashboard';
 import AIChatPanel from './components/AIChatPanel';
 import ConnectModal from './components/ConnectModal';
 import DevConsole from './components/DevConsole';
+
 
 enum View {
   DASHBOARD = 'dashboard',
@@ -64,6 +64,16 @@ const App: React.FC = () => {
     setIsConnected(false);
     setConnectionConfig(null);
     setTopologyData(DEFAULT_TOPOLOGY);
+  };
+
+  const handleDateRangeChange = async (startDate: Date, endDate: Date) => {
+    if (!connectionConfig || !isConnected) return;
+    try {
+      const updatedData = await updateCosts(topologyData, connectionConfig, startDate, endDate);
+      setTopologyData(updatedData);
+    } catch (error) {
+      console.error("Failed to update costs:", error);
+    }
   };
 
   return (
@@ -181,6 +191,7 @@ const App: React.FC = () => {
             <Dashboard
               data={topologyData}
               onAnalysisUpdate={(analysis) => setTopologyData(prev => ({ ...prev, analysis }))}
+              onDateRangeChange={handleDateRangeChange}
             />
           )}
 

@@ -107,7 +107,13 @@ const getAccessToken = async (config: AzureConnectionConfig): Promise<string> =>
   return data.access_token;
 };
 
-const enrichTopologyWithCosts = async (topology: TopologyData, token: string, config: AzureConnectionConfig): Promise<void> => {
+export const enrichTopologyWithCosts = async (
+  topology: TopologyData,
+  token: string,
+  config: AzureConnectionConfig,
+  startDate?: Date,
+  endDate?: Date
+): Promise<void> => {
   const subscriptionId = topology.subscriptionId || config.subscriptionId;
 
   if (!subscriptionId) {
@@ -118,156 +124,151 @@ const enrichTopologyWithCosts = async (topology: TopologyData, token: string, co
   console.log('Starting cost enrichment for subscription:', subscriptionId);
 
   try {
-    // Query Azure Cost Management API for current month costs by resource
     const targetUrl = `https://management.azure.com/subscriptions/${subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2023-03-01`;
     const url = getProxiedUrl(targetUrl, config.proxyUrl);
 
-    console.log('Cost API URL:', url);
-
+    // Date Range Logic
     const now = new Date();
-    // Get last complete month for more accurate monthly cost representation
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-    const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
+    let start = startDate;
+    let end = endDate;
 
-    const costQuery = {
-      type: "ActualCost",
+    if (!start || !end) {
+      // Default: Last complete month
+      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+      const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
+      start = lastMonthStart;
+      end = lastMonthEnd;
+    }
+
+    console.log(`Fetching costs from ${start.toISOString()} to ${end.toISOString()}`);
+
+    // 1. Detailed Query (Resource Level)
+    const detailedQuery = {
+      type: "AmortizedCost",
       timeframe: "Custom",
       timePeriod: {
-        from: lastMonthStart.toISOString().split('T')[0],
-        to: lastMonthEnd.toISOString().split('T')[0]
+        from: start.toISOString().split('T')[0],
+        to: end.toISOString().split('T')[0]
       },
       dataset: {
         granularity: "None",
         aggregation: {
-          totalCost: {
-            name: "Cost",
-            function: "Sum"
-          }
+          totalCost: { name: "Cost", function: "Sum" }
         },
         grouping: [
-          {
-            type: "Dimension",
-            name: "ResourceId"
-          }
+          { type: "Dimension", name: "ResourceId" }
         ]
       }
     };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(costQuery)
-    });
+    // 2. History Query (Monthly Trend - Year To Date)
+    const historyQuery = {
+      type: "AmortizedCost",
+      timeframe: "YearToDate",
+      dataset: {
+        granularity: "Monthly",
+        aggregation: {
+          totalCost: { name: "Cost", function: "Sum" }
+        }
+      }
+    };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.warn('Cost query failed:', response.status, errorText);
+    // Execute both queries in parallel
+    const [detailedRes, historyRes] = await Promise.all([
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(detailedQuery)
+      }),
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(historyQuery)
+      })
+    ]);
+
+    if (!detailedRes.ok) {
+      console.warn('Detailed cost query failed:', detailedRes.status, await detailedRes.text());
       return;
     }
 
-    const costData = await response.json();
+    const detailedData = await detailedRes.json();
 
-    console.log('Cost API Response structure:', {
-      hasProperties: !!costData.properties,
-      hasRows: !!costData.properties?.rows,
-      rowCount: costData.properties?.rows?.length || 0,
-      columns: costData.properties?.columns,
-      sampleRows: costData.properties?.rows?.slice(0, 5)
-    });
-
-    // Detect currency from the first row or default to USD
-    const currencyCode = costData.properties?.rows?.[0]?.[2] || 'USD';
+    // Process Detailed Data
+    const currencyCode = detailedData.properties?.rows?.[0]?.[2] || 'USD';
     const currencySymbol = currencyCode === 'EUR' ? '€' : (currencyCode === 'USD' ? '$' : currencyCode + ' ');
 
-    console.log(`Detected Currency: ${currencyCode} (${currencySymbol})`);
-
-    // Map costs to resources
     const costMap = new Map<string, number>();
-    if (costData.properties?.rows) {
-      costData.properties.rows.forEach((row: any[]) => {
-        const cost = row[0]; // Cost value
-        const resourceId = row[1]?.toLowerCase(); // Resource ID
+    const rawCostItems: any[] = [];
+    let totalSubscriptionCost = 0;
+
+    if (detailedData.properties?.rows) {
+      detailedData.properties.rows.forEach((row: any[]) => {
+        const cost = row[0];
+        const resourceId = row[1]?.toLowerCase();
         if (resourceId && cost > 0) {
           costMap.set(resourceId, cost);
-          // Log first few entries to debug
-          if (costMap.size <= 5) {
-            console.log('Sample cost entry:', { resourceId: row[1], cost, currency: currencyCode });
-          }
+          totalSubscriptionCost += cost;
+
+          const parts = row[1].split('/');
+          rawCostItems.push({
+            id: row[1],
+            name: parts[parts.length - 1] || row[1],
+            type: parts.length > 2 ? parts[parts.length - 2] : 'Unknown',
+            cost,
+            currency: currencyCode
+          });
         }
       });
     }
 
-    console.log(`Fetched costs for ${costMap.size} resources`);
-
-    // Calculate total subscription cost from ALL resources (not just visualized ones)
-    let totalSubscriptionCost = 0;
-    const rawCostItems: any[] = [];
-
-    costMap.forEach((cost, id) => {
-      totalSubscriptionCost += cost;
-
-      // Extract name and type from ID
-      // ID format: /subscriptions/.../resourceGroups/RG/providers/Provider/Type/Name
-      const parts = id.split('/');
-      const name = parts[parts.length - 1] || id;
-      const type = parts.length > 2 ? parts[parts.length - 2] : 'Unknown';
-
-      rawCostItems.push({
-        id,
-        name,
-        type,
-        cost,
-        currency: currencyCode
-      });
-    });
-
-    // Sort by cost descending
     rawCostItems.sort((a, b) => b.cost - a.cost);
-
     topology.totalCost = totalSubscriptionCost;
     topology.currency = currencySymbol;
     topology.rawCostItems = rawCostItems;
 
-    console.log(`Total Subscription Cost: ${currencySymbol}${totalSubscriptionCost.toFixed(2)}`);
+    // Process History Data
+    if (historyRes.ok) {
+      const historyData = await historyRes.json();
+      if (historyData.properties?.rows) {
+        topology.costHistory = historyData.properties.rows.map((row: any[]) => ({
+          cost: row[0],
+          date: row[1] // BillingMonth (e.g., "2023-10-01T00:00:00")
+        })).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      }
+    }
 
-    // Apply costs to topology nodes
-    let matchedCount = 0;
+    // Apply costs to nodes
     topology.nodes.forEach(node => {
       const lowerId = node.id.toLowerCase();
-
-      // Special handling for Subscription node: assign total cost
       if ((node.type as ResourceType) === ResourceType.SUBSCRIPTION) {
         node.cost = `${currencySymbol}${totalSubscriptionCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         node.location = 'Global';
-        matchedCount++;
         return;
       }
 
-      // Direct match
       if (costMap.has(lowerId)) {
         const cost = costMap.get(lowerId);
         node.cost = `${currencySymbol}${cost?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        matchedCount++;
-      }
-      // Parent match (for sub-resources like extensions)
-      else {
-        // Try to find if this node's ID starts with a known parent ID that has cost
-        // This is a heuristic: if we can't find direct cost, look for parent
-        // For now, let's just mark unavailable if not found
-        if (node.type !== ResourceType.SUBSCRIPTION && node.type !== ResourceType.RESOURCE_GROUP) {
-          node.cost = 'Unavailable';
-        }
+      } else if (node.type !== ResourceType.RESOURCE_GROUP) {
+        node.cost = 'Unavailable';
       }
     });
-
-    console.log(`Matched costs for ${matchedCount} nodes out of ${topology.nodes.length}`);
 
   } catch (error: any) {
     console.warn('Error enriching with costs:', error.message || error);
   }
+};
+
+export const updateCosts = async (
+  topology: TopologyData,
+  config: AzureConnectionConfig,
+  startDate: Date,
+  endDate: Date
+): Promise<TopologyData> => {
+  const token = await getAccessToken(config);
+  await enrichTopologyWithCosts(topology, token, config, startDate, endDate);
+  return { ...topology };
 };
 
 const fetchAzureResources = async (token: string, config: AzureConnectionConfig): Promise<AzureRawResource[]> => {

@@ -64,6 +64,7 @@ export interface TopologyData {
     cost?: any;
     security?: any;
   };
+  costHistory?: { date: string; cost: number }[];
 }
 
 export interface CostItem {
