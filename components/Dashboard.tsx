@@ -60,29 +60,9 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
         { name: 'OK', value: statusCounts['OK'] || 0 },
     ];
 
-    // Calculate actual total monthly cost from node cost data
-    let currencySymbol = '$'; // Default
-    const actualTotalCost = data.nodes.reduce((total, node) => {
-        if (node.cost && node.cost !== 'Unavailable' && node.cost !== 'Loading...') {
-            // Detect currency symbol from the first valid cost
-            if (total === 0) {
-                const match = node.cost.match(/^[^0-9]+/);
-                if (match) currencySymbol = match[0];
-            }
-
-            // Remove all non-numeric chars except dot and minus
-            // Note: this assumes standard format (1,234.56). If European format (1.234,56), this needs adjustment.
-            // Azure API returns numbers, and we formatted them with toLocaleString().
-            // If toLocaleString uses commas for decimals, we need to be careful.
-            // But we used undefined locale in azureService, which defaults to US English usually (dot for decimal).
-            const cleanCost = node.cost.replace(/[^0-9.-]+/g, '');
-            const costValue = parseFloat(cleanCost);
-            if (!isNaN(costValue)) {
-                return total + costValue;
-            }
-        }
-        return total;
-    }, 0);
+    // Use the total cost calculated from all resources in the subscription
+    const actualTotalCost = data.totalCost || 0;
+    const currencySymbol = data.currency || '$';
 
     const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#6366f1'];
     const BAR_COLORS = { 'Running': '#22c55e', 'Stopped': '#94a3b8', 'Degraded': '#ef4444', 'OK': '#3b82f6' };

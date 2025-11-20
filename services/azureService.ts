@@ -202,6 +202,17 @@ const enrichTopologyWithCosts = async (topology: TopologyData, token: string, co
 
     console.log(`Fetched costs for ${costMap.size} resources`);
 
+    // Calculate total subscription cost from ALL resources (not just visualized ones)
+    let totalSubscriptionCost = 0;
+    costMap.forEach((cost) => {
+      totalSubscriptionCost += cost;
+    });
+
+    topology.totalCost = totalSubscriptionCost;
+    topology.currency = currencySymbol;
+
+    console.log(`Total Subscription Cost: ${currencySymbol}${totalSubscriptionCost.toFixed(2)}`);
+
     // Apply costs to topology nodes
     let matchedCount = 0;
     topology.nodes.forEach(node => {

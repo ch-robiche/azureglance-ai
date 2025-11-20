@@ -57,6 +57,8 @@ export interface TopologyData {
   links: TopologyLink[];
   isSimulated?: boolean;
   subscriptionId?: string;
+  totalCost?: number;
+  currency?: string;
 }
 
 export interface ChatMessage {
