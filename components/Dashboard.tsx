@@ -11,11 +11,9 @@ interface DashboardProps {
     data: TopologyData;
     onAnalysisUpdate?: (analysis: { cost: any, security: any }) => void;
     onDateRangeChange?: (startDate: Date, endDate: Date) => void;
-    onViewSecurity?: () => void;
-    onViewCost?: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRangeChange, onViewSecurity, onViewCost }) => {
+const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRangeChange }) => {
     const [costData, setCostData] = React.useState<any>(data.analysis?.cost || null);
     const [securityData, setSecurityData] = React.useState<any>(data.analysis?.security || null);
     const [loadingAnalysis, setLoadingAnalysis] = React.useState(false);
@@ -127,7 +125,10 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
 
                 <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg relative group">
                     <div className="flex justify-between items-start mb-2">
-                        <h3 className="text-slate-400 text-sm uppercase font-bold">Monthly Cost</h3>
+                        <h3 className="text-slate-400 text-sm uppercase font-bold">
+                            {/* Show "Month-to-Date" if Current Month is selected (value 0) */}
+                            Month-to-Date Cost
+                        </h3>
                         <select
                             className="bg-slate-900 border border-slate-600 text-xs rounded p-1 text-slate-300 focus:border-blue-500 outline-none"
                             onChange={handleMonthChange}
@@ -161,10 +162,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
                     )}
                 </div>
 
-                <div
-                    className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg cursor-pointer hover:border-blue-500 transition-colors"
-                    onClick={onViewSecurity}
-                >
+                <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                     <div className="flex justify-between items-start">
                         <h3 className="text-slate-400 text-sm uppercase font-bold mb-1">Security Score</h3>
                         <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -189,19 +187,9 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
             {/* Cost Trend Chart */}
             {costTrendData.length > 0 && (
                 <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg mb-8 h-80">
-                    <h3 className="text-white font-semibold mb-4">Yearly Cost Trend (Amortized) - Click bar for analysis</h3>
+                    <h3 className="text-white font-semibold mb-4">Cost Trend (Amortized) - Click bar for monthly analysis</h3>
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={costTrendData} onClick={(data: any) => {
-                            if (data && data.activePayload && data.activePayload.length > 0) {
-                                const payload = data.activePayload[0].payload;
-                                setMonthAnalysis({
-                                    isOpen: true,
-                                    month: payload.name,
-                                    cost: payload.cost,
-                                    currency: currencySymbol
-                                });
-                            }
-                        }}>
+                        <BarChart data={costTrendData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                             <XAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#94a3b8' }} axisLine={{ stroke: '#475569' }} />
                             <YAxis stroke="#94a3b8" tick={{ fill: '#94a3b8' }} axisLine={{ stroke: '#475569' }} tickFormatter={(val) => `${currencySymbol}${val}`} />
@@ -210,7 +198,20 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
                                 formatter={(value: number) => [`${currencySymbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 'Cost']}
                                 cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                             />
-                            <Bar dataKey="cost" fill="#3b82f6" radius={[4, 4, 0, 0]} cursor="pointer" />
+                            <Bar
+                                dataKey="cost"
+                                fill="#3b82f6"
+                                radius={[4, 4, 0, 0]}
+                                cursor="pointer"
+                                onClick={(data: any) => {
+                                    setMonthAnalysis({
+                                        isOpen: true,
+                                        month: data.name,
+                                        cost: data.cost,
+                                        currency: currencySymbol
+                                    });
+                                }}
+                            />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -262,10 +263,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
             {/* AI Insights */}
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Cost Insights */}
-                <div
-                    className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg cursor-pointer hover:border-blue-500 transition-colors"
-                    onClick={onViewCost}
-                >
+                <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <div className="p-2 bg-blue-500/20 rounded-lg">
