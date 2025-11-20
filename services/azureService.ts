@@ -14,7 +14,10 @@ const mapAzureTypeToInternal = (azureType: string): ResourceType => {
   return ResourceType.UNKNOWN;
 };
 
-export const connectAndFetch = async (config: AzureConnectionConfig): Promise<TopologyData> => {
+export const connectAndFetch = async (
+  config: AzureConnectionConfig,
+  onDataUpdate?: (data: TopologyData) => void
+): Promise<TopologyData> => {
   try {
     // 1. Authenticate - Get Access Token
     const token = await getAccessToken(config);
@@ -29,15 +32,22 @@ export const connectAndFetch = async (config: AzureConnectionConfig): Promise<To
     Promise.race([
       enrichTopologyWithCosts(topology, token, config),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Cost fetch timeout')), 10000))
-    ]).catch(err => {
-      console.warn('Failed to fetch cost data:', err.message || err);
-      // Set all resource costs to 'Unavailable' if fetch fails
-      topology.nodes.forEach(node => {
-        if (!node.cost && node.type !== ResourceType.SUBSCRIPTION && node.type !== ResourceType.RESOURCE_GROUP) {
-          node.cost = 'Unavailable';
-        }
+    ])
+      .then(() => {
+        // Success: Trigger update
+        if (onDataUpdate) onDataUpdate({ ...topology });
+      })
+      .catch(err => {
+        console.warn('Failed to fetch cost data:', err.message || err);
+        // Set all resource costs to 'Unavailable' if fetch fails
+        topology.nodes.forEach(node => {
+          if (!node.cost && node.type !== ResourceType.SUBSCRIPTION && node.type !== ResourceType.RESOURCE_GROUP) {
+            node.cost = 'Unavailable';
+          }
+        });
+        // Trigger update even on failure so UI shows "Unavailable"
+        if (onDataUpdate) onDataUpdate({ ...topology });
       });
-    });
 
     return topology;
   } catch (error: any) {

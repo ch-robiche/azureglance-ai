@@ -23,7 +23,7 @@ const App: React.FC = () => {
   const [showCopilot, setShowCopilot] = useState(true);
   const [promptInput, setPromptInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  
+
   // Connection State
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -46,21 +46,23 @@ const App: React.FC = () => {
 
   const handleConnect = async (config: AzureConnectionConfig) => {
     try {
-        const realData = await connectAndFetch(config);
-        setTopologyData(realData);
-        setConnectionConfig(config);
-        setIsConnected(true);
+      const realData = await connectAndFetch(config, (updatedData) => {
+        setTopologyData(updatedData);
+      });
+      setTopologyData(realData);
+      setConnectionConfig(config);
+      setIsConnected(true);
     } catch (error: any) {
-        console.error(error);
-        // Re-throw to let the Modal handle the UI error state
-        throw error;
+      console.error(error);
+      // Re-throw to let the Modal handle the UI error state
+      throw error;
     }
   };
 
   const handleDisconnect = () => {
-      setIsConnected(false);
-      setConnectionConfig(null);
-      setTopologyData(DEFAULT_TOPOLOGY);
+    setIsConnected(false);
+    setConnectionConfig(null);
+    setTopologyData(DEFAULT_TOPOLOGY);
   };
 
   return (
@@ -74,7 +76,7 @@ const App: React.FC = () => {
         </div>
 
         <nav className="flex flex-col gap-6 w-full">
-          <button 
+          <button
             onClick={() => setCurrentView(View.DASHBOARD)}
             className={`p-3 rounded-lg mx-2 transition-all ${currentView === View.DASHBOARD ? 'bg-blue-500/20 text-blue-400' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'}`}
             title="Dashboard"
@@ -82,7 +84,7 @@ const App: React.FC = () => {
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
           </button>
 
-          <button 
+          <button
             onClick={() => setCurrentView(View.TOPOLOGY)}
             className={`p-3 rounded-lg mx-2 transition-all ${currentView === View.TOPOLOGY ? 'bg-blue-500/20 text-blue-400' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'}`}
             title="Topology Map"
@@ -92,7 +94,7 @@ const App: React.FC = () => {
 
           <div className="h-px w-8 bg-slate-800 mx-auto my-2"></div>
 
-          <button 
+          <button
             onClick={() => setShowCopilot(!showCopilot)}
             className={`p-3 rounded-lg mx-2 transition-all ${showCopilot ? 'bg-purple-500/20 text-purple-400' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'}`}
             title="AI Copilot"
@@ -108,81 +110,81 @@ const App: React.FC = () => {
         <header className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <h1 className="font-bold text-xl text-white tracking-tight">Azure<span className="text-blue-500">Glance</span></h1>
-            
+
             {isConnected ? (
-                <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${topologyData.isSimulated ? 'bg-amber-900/20 border-amber-800' : 'bg-green-900/20 border-green-800'}`}>
-                    <span className={`w-2 h-2 rounded-full animate-pulse ${topologyData.isSimulated ? 'bg-amber-500' : 'bg-green-500'}`}></span>
-                    <span className={`text-xs font-medium ${topologyData.isSimulated ? 'text-amber-400' : 'text-green-400'}`}>
-                        {topologyData.isSimulated ? 'Simulated Connection (CORS)' : 'Live Connection'}
-                    </span>
-                    <button onClick={handleDisconnect} className="ml-2 text-slate-500 hover:text-white" title="Disconnect">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                </div>
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${topologyData.isSimulated ? 'bg-amber-900/20 border-amber-800' : 'bg-green-900/20 border-green-800'}`}>
+                <span className={`w-2 h-2 rounded-full animate-pulse ${topologyData.isSimulated ? 'bg-amber-500' : 'bg-green-500'}`}></span>
+                <span className={`text-xs font-medium ${topologyData.isSimulated ? 'text-amber-400' : 'text-green-400'}`}>
+                  {topologyData.isSimulated ? 'Simulated Connection (CORS)' : 'Live Connection'}
+                </span>
+                <button onClick={handleDisconnect} className="ml-2 text-slate-500 hover:text-white" title="Disconnect">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
             ) : (
-                 <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700">
-                    <span className="w-2 h-2 rounded-full bg-slate-500"></span>
-                    <span className="text-xs font-medium text-slate-400">Demo Mode</span>
-                </div>
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700">
+                <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+                <span className="text-xs font-medium text-slate-400">Demo Mode</span>
+              </div>
             )}
           </div>
-          
-          <div className="flex items-center gap-4 flex-1 justify-end">
-             {!isConnected && (
-                 <button 
-                    onClick={() => setIsConnectModalOpen(true)}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium text-slate-300 transition-colors flex items-center gap-2"
-                 >
-                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                     </svg>
-                     Connect Subscription
-                 </button>
-             )}
 
-             <div className="relative w-full max-w-md">
-                <input 
-                    type="text" 
-                    placeholder="Describe infrastructure to generate..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition-colors"
-                    value={promptInput}
-                    onChange={(e) => setPromptInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-                    disabled={isGenerating}
-                />
-                 <div className="absolute left-3 top-2.5 text-slate-500">
-                     {isGenerating ? (
-                         <svg className="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                         </svg>
-                     ) : (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                        </svg>
-                     )}
-                 </div>
-             </div>
+          <div className="flex items-center gap-4 flex-1 justify-end">
+            {!isConnected && (
+              <button
+                onClick={() => setIsConnectModalOpen(true)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium text-slate-300 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Connect Subscription
+              </button>
+            )}
+
+            <div className="relative w-full max-w-md">
+              <input
+                type="text"
+                placeholder="Describe infrastructure to generate..."
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition-colors"
+                value={promptInput}
+                onChange={(e) => setPromptInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+                disabled={isGenerating}
+              />
+              <div className="absolute left-3 top-2.5 text-slate-500">
+                {isGenerating ? (
+                  <svg className="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                  </svg>
+                )}
+              </div>
+            </div>
           </div>
         </header>
 
         {/* Viewport */}
         <div className="flex-1 relative overflow-hidden">
           {currentView === View.TOPOLOGY && (
-            <TopologyMap 
-              data={topologyData} 
-              onNodeClick={setSelectedNode} 
+            <TopologyMap
+              data={topologyData}
+              onNodeClick={setSelectedNode}
             />
           )}
           {currentView === View.DASHBOARD && (
-             <Dashboard data={topologyData} />
+            <Dashboard data={topologyData} />
           )}
 
           {/* Floating Details Panel */}
-          <DetailsPanel 
-            node={selectedNode} 
-            alerts={MOCK_ALERTS} 
-            onClose={() => setSelectedNode(null)} 
+          <DetailsPanel
+            node={selectedNode}
+            alerts={MOCK_ALERTS}
+            onClose={() => setSelectedNode(null)}
           />
         </div>
       </main>
@@ -195,10 +197,10 @@ const App: React.FC = () => {
       )}
 
       {/* Modals */}
-      <ConnectModal 
-        isOpen={isConnectModalOpen} 
-        onClose={() => setIsConnectModalOpen(false)} 
-        onConnect={handleConnect} 
+      <ConnectModal
+        isOpen={isConnectModalOpen}
+        onClose={() => setIsConnectModalOpen(false)}
+        onConnect={handleConnect}
       />
     </div>
   );
