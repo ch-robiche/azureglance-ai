@@ -25,10 +25,19 @@ export const connectAndFetch = async (config: AzureConnectionConfig): Promise<To
     // 3. Transform Data to Topology
     const topology = transformResourcesToTopology(resources, config.subscriptionId);
 
-    // 4. Enrich with Cost Data (async, don't block)
-    enrichTopologyWithCosts(topology, token, config).catch(err =>
-      console.warn('Failed to fetch cost data:', err)
-    );
+    // 4. Enrich with Cost Data (async, don't block, with timeout)
+    Promise.race([
+      enrichTopologyWithCosts(topology, token, config),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Cost fetch timeout')), 10000))
+    ]).catch(err => {
+      console.warn('Failed to fetch cost data:', err.message || err);
+      // Set all resource costs to 'Unavailable' if fetch fails
+      topology.nodes.forEach(node => {
+        if (!node.cost && node.type !== ResourceType.SUBSCRIPTION && node.type !== ResourceType.RESOURCE_GROUP) {
+          node.cost = 'Unavailable';
+        }
+      });
+    });
 
     return topology;
   } catch (error: any) {
@@ -80,12 +89,19 @@ const getAccessToken = async (config: AzureConnectionConfig): Promise<string> =>
 };
 
 const enrichTopologyWithCosts = async (topology: TopologyData, token: string, config: AzureConnectionConfig): Promise<void> => {
-  if (!config.subscriptionId) return;
+  if (!config.subscriptionId) {
+    console.log('Cost enrichment skipped: no subscription ID');
+    return;
+  }
+
+  console.log('Starting cost enrichment for subscription:', config.subscriptionId);
 
   try {
     // Query Azure Cost Management API for current month costs by resource
     const targetUrl = `https://management.azure.com/subscriptions/${config.subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2023-03-01`;
     const url = getProxiedUrl(targetUrl, config.proxyUrl);
+
+    console.log('Cost API URL:', url);
 
     const now = new Date();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);

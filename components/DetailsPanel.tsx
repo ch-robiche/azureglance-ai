@@ -57,7 +57,11 @@ const DetailsPanel: React.FC<DetailsPanelProps> = ({ node, alerts, onClose }) =>
           <div>
             <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Monthly Cost</label>
             <div className="text-slate-200 text-sm">
-              {node.cost || (
+              {node.cost ? (
+                <span className={node.cost === 'Unavailable' ? 'text-slate-500 italic text-xs' : ''}>
+                  {node.cost}
+                </span>
+              ) : (
                 <span className="text-slate-500 italic text-xs">Loading...</span>
               )}
             </div>
