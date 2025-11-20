@@ -8,15 +8,23 @@ import CostTableModal from './CostTableModal';
 
 interface DashboardProps {
     data: TopologyData;
+    onAnalysisUpdate?: (analysis: { cost: any, security: any }) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ data }) => {
-    const [costData, setCostData] = React.useState<any>(null);
-    const [securityData, setSecurityData] = React.useState<any>(null);
+const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate }) => {
+    const [costData, setCostData] = React.useState<any>(data.analysis?.cost || null);
+    const [securityData, setSecurityData] = React.useState<any>(data.analysis?.security || null);
     const [loadingAnalysis, setLoadingAnalysis] = React.useState(false);
     const [isCostModalOpen, setIsCostModalOpen] = React.useState(false);
 
     React.useEffect(() => {
+        // If analysis is already present in data, use it and don't fetch
+        if (data.analysis) {
+            if (data.analysis.cost !== costData) setCostData(data.analysis.cost);
+            if (data.analysis.security !== securityData) setSecurityData(data.analysis.security);
+            return;
+        }
+
         const fetchAnalysis = async () => {
             setLoadingAnalysis(true);
             try {
@@ -27,6 +35,11 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
                 ]);
                 setCostData(cost);
                 setSecurityData(security);
+
+                // Cache the result in the parent state
+                if (onAnalysisUpdate) {
+                    onAnalysisUpdate({ cost, security });
+                }
             } catch (e) {
                 console.error("Failed to fetch dashboard analysis", e);
             } finally {
@@ -34,10 +47,10 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
             }
         };
 
-        if (data.nodes.length > 0) {
+        if (data.nodes.length > 0 && !data.analysis) {
             fetchAnalysis();
         }
-    }, [data]);
+    }, [data]); // Intentionally omitted onAnalysisUpdate to avoid re-triggering if parent recreates function
 
     // Compute metrics from data
     const typeCounts = data.nodes.reduce((acc, node) => {

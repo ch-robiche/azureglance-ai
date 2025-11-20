@@ -59,7 +59,11 @@ export interface TopologyData {
   subscriptionId?: string;
   totalCost?: number;
   currency?: string;
-  rawCostItems?: CostItem[];
+  rawCostItems?: any[]; // Full list of cost items
+  analysis?: {
+    cost?: any;
+    security?: any;
+  };
 }
 
 export interface CostItem {

@@ -178,7 +178,10 @@ const App: React.FC = () => {
             />
           )}
           {currentView === View.DASHBOARD && (
-            <Dashboard data={topologyData} />
+            <Dashboard
+              data={topologyData}
+              onAnalysisUpdate={(analysis) => setTopologyData(prev => ({ ...prev, analysis }))}
+            />
           )}
 
           {/* Floating Details Panel */}
