@@ -71,7 +71,12 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
         // End of the target month:
         // If monthsBack = 0 (Current), we want last day of this month.
         // new Date(y, m + 1, 0) gives last day of month m.
-        const end = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1, 0);
+        let end = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1, 0);
+
+        // If selecting current month, clamp end date to today to avoid fetching forecast data
+        if (monthsBack === 0) {
+            end = now;
+        }
 
         if (onDateRangeChange) {
             onDateRangeChange(start, end);

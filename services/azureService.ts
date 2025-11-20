@@ -133,11 +133,10 @@ export const enrichTopologyWithCosts = async (
     let end = endDate;
 
     if (!start || !end) {
-      // Default: Last complete month
-      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-      const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
-      start = lastMonthStart;
-      end = lastMonthEnd;
+      // Default: Current Month (up to today)
+      const now = new Date();
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = now;
     }
 
     console.log(`Fetching costs from ${start.toISOString()} to ${end.toISOString()}`);
