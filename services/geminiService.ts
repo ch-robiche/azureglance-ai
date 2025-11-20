@@ -168,7 +168,7 @@ export const generateSecurityAnalysis = async (topology: TopologyData): Promise<
       contents: `Analyze the security posture of this Azure infrastructure: ${JSON.stringify(simplifyTopology(topology))}.
       Identify critical risks (e.g. open ports, unencrypted data, public access).
       Provide a security score (0-100).
-      List top 3 critical risks with remediation steps.`,
+      List all identified critical risks with remediation steps.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: securityAnalysisSchema
