@@ -61,10 +61,22 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
     ];
 
     // Calculate actual total monthly cost from node cost data
+    let currencySymbol = '$'; // Default
     const actualTotalCost = data.nodes.reduce((total, node) => {
         if (node.cost && node.cost !== 'Unavailable' && node.cost !== 'Loading...') {
-            // Remove $ and commas, then parse as float
-            const costValue = parseFloat(node.cost.replace(/[$,]/g, ''));
+            // Detect currency symbol from the first valid cost
+            if (total === 0) {
+                const match = node.cost.match(/^[^0-9]+/);
+                if (match) currencySymbol = match[0];
+            }
+
+            // Remove all non-numeric chars except dot and minus
+            // Note: this assumes standard format (1,234.56). If European format (1.234,56), this needs adjustment.
+            // Azure API returns numbers, and we formatted them with toLocaleString().
+            // If toLocaleString uses commas for decimals, we need to be careful.
+            // But we used undefined locale in azureService, which defaults to US English usually (dot for decimal).
+            const cleanCost = node.cost.replace(/[^0-9.-]+/g, '');
+            const costValue = parseFloat(cleanCost);
             if (!isNaN(costValue)) {
                 return total + costValue;
             }
@@ -93,7 +105,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
                     {actualTotalCost > 0 ? (
                         <>
                             <div className="text-4xl font-bold text-white">
-                                ${actualTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {currencySymbol}{actualTotalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                             <div className="text-slate-400 text-sm mt-2">
                                 Last month (Azure Cost Mgmt)

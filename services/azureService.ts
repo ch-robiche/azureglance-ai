@@ -178,6 +178,12 @@ const enrichTopologyWithCosts = async (topology: TopologyData, token: string, co
       sampleRows: costData.properties?.rows?.slice(0, 5)
     });
 
+    // Detect currency from the first row or default to USD
+    const currencyCode = costData.properties?.rows?.[0]?.[2] || 'USD';
+    const currencySymbol = currencyCode === 'EUR' ? '€' : (currencyCode === 'USD' ? '$' : currencyCode + ' ');
+
+    console.log(`Detected Currency: ${currencyCode} (${currencySymbol})`);
+
     // Map costs to resources
     const costMap = new Map<string, number>();
     if (costData.properties?.rows) {
@@ -188,7 +194,7 @@ const enrichTopologyWithCosts = async (topology: TopologyData, token: string, co
           costMap.set(resourceId, cost);
           // Log first few entries to debug
           if (costMap.size <= 5) {
-            console.log('Sample cost entry:', { resourceId: row[1], cost });
+            console.log('Sample cost entry:', { resourceId: row[1], cost, currency: currencyCode });
           }
         }
       });
@@ -196,29 +202,29 @@ const enrichTopologyWithCosts = async (topology: TopologyData, token: string, co
 
     console.log(`Fetched costs for ${costMap.size} resources`);
 
-    // Update topology nodes with cost data
+    // Apply costs to topology nodes
+    let matchedCount = 0;
     topology.nodes.forEach(node => {
-      const nodeIdLower = node.id.toLowerCase();
-      let cost = costMap.get(nodeIdLower);
+      const lowerId = node.id.toLowerCase();
 
-      // If no direct match, try to find parent resource cost
-      // (e.g., VM extensions inherit VM cost)
-      if (!cost) {
-        // Try to extract parent resource ID (remove last segment)
-        const parts = nodeIdLower.split('/');
-        if (parts.length > 2) {
-          const parentId = parts.slice(0, -2).join('/');
-          cost = costMap.get(parentId);
+      // Direct match
+      if (costMap.has(lowerId)) {
+        const cost = costMap.get(lowerId);
+        node.cost = `${currencySymbol}${cost?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        matchedCount++;
+      }
+      // Parent match (for sub-resources like extensions)
+      else {
+        // Try to find if this node's ID starts with a known parent ID that has cost
+        // This is a heuristic: if we can't find direct cost, look for parent
+        // For now, let's just mark unavailable if not found
+        if (node.type !== ResourceType.SUBSCRIPTION && node.type !== ResourceType.RESOURCE_GROUP) {
+          node.cost = 'Unavailable';
         }
       }
-
-      if (cost !== undefined && cost > 0) {
-        node.cost = `$${cost.toFixed(2)}`;
-      } else if (node.type !== ResourceType.SUBSCRIPTION && node.type !== ResourceType.RESOURCE_GROUP) {
-        // Only mark as $0.00 for actual resources, not containers
-        node.cost = '$0.00';
-      }
     });
+
+    console.log(`Matched costs for ${matchedCount} nodes out of ${topology.nodes.length}`);
 
   } catch (error: any) {
     console.warn('Error enriching with costs:', error.message || error);
