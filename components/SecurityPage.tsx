@@ -4,9 +4,10 @@ import { TopologyData } from '../types';
 interface SecurityPageProps {
     data: TopologyData;
     onBack: () => void;
+    onRunAnalysis: () => void;
 }
 
-const SecurityPage: React.FC<SecurityPageProps> = ({ data, onBack }) => {
+const SecurityPage: React.FC<SecurityPageProps> = ({ data, onBack, onRunAnalysis }) => {
     const analysis = data.analysis?.security;
 
     if (!analysis) return (
@@ -19,8 +20,26 @@ const SecurityPage: React.FC<SecurityPageProps> = ({ data, onBack }) => {
                 </button>
                 <h1 className="text-2xl font-bold">Security Analysis</h1>
             </div>
-            <div className="p-6 bg-slate-800 rounded-xl border border-slate-700 text-center text-slate-400">
-                No security analysis available. Please wait for the AI analysis to complete on the Dashboard.
+            <div className="flex flex-col items-center justify-center h-[60vh] text-center">
+                <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700 shadow-xl max-w-md">
+                    <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                    </div>
+                    <h2 className="text-xl font-bold mb-2">Security Analysis Required</h2>
+                    <p className="text-slate-400 mb-8">Run a comprehensive AI analysis to identify vulnerabilities and security risks in your infrastructure.</p>
+                    <button
+                        onClick={onRunAnalysis}
+                        className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2 mx-auto"
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Run Security Analysis
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -63,9 +82,9 @@ const SecurityPage: React.FC<SecurityPageProps> = ({ data, onBack }) => {
                             <div>
                                 <div className="flex items-center gap-3 mb-2">
                                     <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${risk.severity === 'Critical' ? 'bg-red-500/20 text-red-400' :
-                                            risk.severity === 'High' ? 'bg-orange-500/20 text-orange-400' :
-                                                risk.severity === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                                                    'bg-blue-500/20 text-blue-400'
+                                        risk.severity === 'High' ? 'bg-orange-500/20 text-orange-400' :
+                                            risk.severity === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                                                'bg-blue-500/20 text-blue-400'
                                         }`}>
                                         {risk.severity}
                                     </span>

@@ -3,7 +3,7 @@ import {
     PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend,
     BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from 'recharts';
-import { TopologyData, ResourceType } from '../types';
+import { TopologyData } from '../types';
 import CostTableModal from './CostTableModal';
 import MonthAnalysisModal from './MonthAnalysisModal';
 
@@ -12,79 +12,37 @@ interface DashboardProps {
     onAnalysisUpdate?: (analysis: { cost: any, security: any }) => void;
     onDateRangeChange?: (startDate: Date, endDate: Date) => void;
     onSaveAnalysis?: (type: string, data: any) => void;
+    onRunAnalysis: (type: 'cost' | 'security') => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRangeChange, onSaveAnalysis }) => {
+const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRangeChange, onSaveAnalysis, onRunAnalysis }) => {
     const [costData, setCostData] = React.useState<any>(data.analysis?.cost || null);
     const [securityData, setSecurityData] = React.useState<any>(data.analysis?.security || null);
-    const [loadingAnalysis, setLoadingAnalysis] = React.useState(false);
     const [isCostModalOpen, setIsCostModalOpen] = React.useState(false);
     const [monthAnalysis, setMonthAnalysis] = React.useState<{ isOpen: boolean, month: string, cost: number, currency: string }>({
         isOpen: false, month: '', cost: 0, currency: ''
     });
 
     React.useEffect(() => {
-        // If analysis is already present in data, use it and don't fetch
         if (data.analysis) {
             if (data.analysis.cost !== costData) setCostData(data.analysis.cost);
             if (data.analysis.security !== securityData) setSecurityData(data.analysis.security);
-            return;
         }
-
-        const fetchAnalysis = async () => {
-            setLoadingAnalysis(true);
-            try {
-                // Parallel fetch
-                const [cost, security] = await Promise.all([
-                    import('../services/geminiService').then(m => m.generateCostAnalysis(data)),
-                    import('../services/geminiService').then(m => m.generateSecurityAnalysis(data))
-                ]);
-                setCostData(cost);
-                setSecurityData(security);
-
-                // Cache the result in the parent state
-                if (onAnalysisUpdate) {
-                    onAnalysisUpdate({ cost, security });
-                }
-            } catch (e) {
-                console.error("Failed to fetch dashboard analysis", e);
-            } finally {
-                setLoadingAnalysis(false);
-            }
-        };
-
-        if (data.nodes.length > 0 && !data.analysis) {
-            fetchAnalysis();
-        }
-    }, [data]); // Intentionally omitted onAnalysisUpdate to avoid re-triggering if parent recreates function
+    }, [data]);
 
     const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const monthsBack = parseInt(e.target.value);
         const now = new Date();
-
-        // 0 = Current Month
-        // 1 = Last Month
-
-        // Start of the target month:
-        // If monthsBack = 0 (Current), we want 1st of this month.
         const start = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
-
-        // End of the target month:
-        // If monthsBack = 0 (Current), we want last day of this month.
-        // new Date(y, m + 1, 0) gives last day of month m.
         let end = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1, 0);
-
-        // If selecting current month, clamp end date to today to avoid fetching forecast data
         if (monthsBack === 0) {
             end = now;
         }
-
         if (onDateRangeChange) {
             onDateRangeChange(start, end);
         }
     };
 
-    // Compute metrics from data
     const typeCounts = data.nodes.reduce((acc, node) => {
         acc[node.type] = (acc[node.type] || 0) + 1;
         return acc;
@@ -107,7 +65,6 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
         { name: 'OK', value: statusCounts['OK'] || 0 },
     ];
 
-    // Use the total cost calculated from all resources in the subscription
     const actualTotalCost = data.totalCost || 0;
     const currencySymbol = data.currency || '$';
     const costTrendData = data.costHistory?.map(item => ({
@@ -145,7 +102,6 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
                 <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg relative group">
                     <div className="flex justify-between items-start mb-2">
                         <h3 className="text-slate-400 text-sm uppercase font-bold">
-                            {/* Show "Month-to-Date" if Current Month is selected (value 0) */}
                             Month-to-Date Cost
                         </h3>
                         <select
@@ -188,9 +144,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
                     </div>
-                    {loadingAnalysis ? (
-                        <div className="animate-pulse h-10 w-32 bg-slate-700 rounded mt-1"></div>
-                    ) : (
+                    {securityData ? (
                         <>
                             <div className={`text-4xl font-bold ${(securityData?.securityScore || 0) > 80 ? 'text-green-500' : (securityData?.securityScore || 0) > 50 ? 'text-amber-500' : 'text-red-500'}`}>
                                 {securityData ? `${securityData.securityScore}%` : '-'}
@@ -199,11 +153,12 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
                                 {securityData?.criticalRisksCount > 0 ? <span className="text-red-400">{securityData.criticalRisksCount} Critical Risks</span> : 'No critical risks detected'}
                             </div>
                         </>
+                    ) : (
+                        <div className="text-slate-500 text-sm mt-2">Analysis unavailable</div>
                     )}
                 </div>
             </div>
 
-            {/* Cost Trend Chart */}
             {costTrendData.length > 0 && (
                 <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg mb-8 h-80">
                     <h3 className="text-white font-semibold mb-4">Cost Trend (Amortized) - Click bar for monthly analysis</h3>
@@ -279,9 +234,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
                 </div>
             </div>
 
-            {/* AI Insights */}
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Cost Insights */}
                 <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
@@ -292,16 +245,11 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
                             </div>
                             <h3 className="text-white font-semibold">Cost Insights</h3>
                         </div>
-                        <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
+                        <button onClick={() => onRunAnalysis('cost')} className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="Run Analysis">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        </button>
                     </div>
-                    {loadingAnalysis ? (
-                        <div className="space-y-2">
-                            <div className="h-4 bg-slate-700 rounded w-3/4 animate-pulse"></div>
-                            <div className="h-4 bg-slate-700 rounded w-1/2 animate-pulse"></div>
-                        </div>
-                    ) : costData ? (
+                    {costData ? (
                         <div className="space-y-4">
                             <div className="p-3 bg-slate-900/50 rounded-lg border border-slate-700">
                                 <div className="text-sm text-slate-400 mb-1">Potential Savings</div>
@@ -318,22 +266,21 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onAnalysisUpdate, onDateRan
                     )}
                 </div>
 
-                {/* Security Insights */}
                 <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                    <div className="flex items-center gap-2 mb-4">
-                        <div className="p-2 bg-purple-500/20 rounded-lg">
-                            <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                            </svg>
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <div className="p-2 bg-purple-500/20 rounded-lg">
+                                <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                </svg>
+                            </div>
+                            <h3 className="text-white font-semibold">Security Insights</h3>
                         </div>
-                        <h3 className="text-white font-semibold">Security Insights</h3>
+                        <button onClick={() => onRunAnalysis('security')} className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="Run Analysis">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        </button>
                     </div>
-                    {loadingAnalysis ? (
-                        <div className="space-y-2">
-                            <div className="h-4 bg-slate-700 rounded w-3/4 animate-pulse"></div>
-                            <div className="h-4 bg-slate-700 rounded w-1/2 animate-pulse"></div>
-                        </div>
-                    ) : securityData ? (
+                    {securityData ? (
                         <div className="space-y-4">
                             <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-700">
                                 <span className="text-sm text-slate-400">Security Score</span>

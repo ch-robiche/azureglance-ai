@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { TopologyData, TopologyNode, AzureConnectionConfig } from './types';
 import { DEFAULT_TOPOLOGY, MOCK_ALERTS } from './constants';
-import { generateTopologyFromPrompt } from './services/geminiService';
+import { generateTopologyFromPrompt, generateCostAnalysis, generateSecurityAnalysis } from './services/geminiService';
 import { connectAndFetch, updateCosts } from './services/azureService';
 import TopologyMap from './components/TopologyMap';
 import DetailsPanel from './components/DetailsPanel';
@@ -9,6 +9,7 @@ import Dashboard from './components/Dashboard';
 import AIChatPanel from './components/AIChatPanel';
 import ConnectModal from './components/ConnectModal';
 import DevConsole from './components/DevConsole';
+import AnalysisConsole from './components/AnalysisConsole';
 import SecurityPage from './components/SecurityPage';
 import CostAnalysisPage from './components/CostAnalysisPage';
 import { LoginPage } from './components/LoginPage';
@@ -29,12 +30,14 @@ const App: React.FC = () => {
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
-  const [currentView, setCurrentView] = useState<View>(View.TOPOLOGY);
+  const [currentView, setCurrentView] = useState<View>(View.DASHBOARD);
   const [topologyData, setTopologyData] = useState<TopologyData>(DEFAULT_TOPOLOGY);
   const [selectedNode, setSelectedNode] = useState<TopologyNode | null>(null);
   const [showCopilot, setShowCopilot] = useState(true);
   const [promptInput, setPromptInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisType, setAnalysisType] = useState<'cost' | 'security' | null>(null);
 
   // Connection State
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
@@ -102,6 +105,32 @@ const App: React.FC = () => {
   const handleLoadAnalysis = (data: any) => {
     setTopologyData(prev => ({ ...prev, analysis: data }));
     setCurrentView(View.DASHBOARD);
+  };
+
+  const handleRunAnalysis = async (type: 'cost' | 'security') => {
+    setAnalysisType(type);
+    setIsAnalyzing(true);
+
+    try {
+      let result;
+      if (type === 'cost') {
+        result = await generateCostAnalysis(topologyData);
+        setTopologyData(prev => ({
+          ...prev,
+          analysis: { ...prev.analysis, cost: result }
+        }));
+      } else {
+        result = await generateSecurityAnalysis(topologyData);
+        setTopologyData(prev => ({
+          ...prev,
+          analysis: { ...prev.analysis, security: result }
+        }));
+      }
+    } catch (e) {
+      console.error("Analysis failed", e);
+      alert("Analysis failed. Please check your API key.");
+      setIsAnalyzing(false);
+    }
   };
 
   return (
@@ -190,6 +219,7 @@ const App: React.FC = () => {
               <Dashboard
                 data={topologyData}
                 onSaveAnalysis={handleSaveAnalysis}
+                onRunAnalysis={handleRunAnalysis}
               />
             </div>
           )}
@@ -198,7 +228,7 @@ const App: React.FC = () => {
             <div className="absolute inset-0">
               <TopologyMap
                 data={topologyData}
-                onNodeSelect={setSelectedNode}
+                onNodeClick={setSelectedNode}
               />
               <div className="absolute bottom-6 left-6 right-6 max-w-3xl mx-auto pointer-events-none">
                 <div className="pointer-events-auto bg-slate-900/90 backdrop-blur border border-slate-700 rounded-xl p-2 flex gap-2 shadow-2xl">
@@ -239,13 +269,21 @@ const App: React.FC = () => {
 
           {currentView === View.SECURITY && (
             <div className="h-full overflow-y-auto p-6">
-              <SecurityPage data={topologyData} />
+              <SecurityPage
+                data={topologyData}
+                onBack={() => setCurrentView(View.DASHBOARD)}
+                onRunAnalysis={() => handleRunAnalysis('security')}
+              />
             </div>
           )}
 
           {currentView === View.COST && (
             <div className="h-full overflow-y-auto p-6">
-              <CostAnalysisPage data={topologyData} />
+              <CostAnalysisPage
+                data={topologyData}
+                onBack={() => setCurrentView(View.DASHBOARD)}
+                onRunAnalysis={() => handleRunAnalysis('cost')}
+              />
             </div>
           )}
         </div>
@@ -254,6 +292,7 @@ const App: React.FC = () => {
         {selectedNode && (
           <DetailsPanel
             node={selectedNode}
+            alerts={MOCK_ALERTS}
             onClose={() => setSelectedNode(null)}
           />
         )}
@@ -282,6 +321,12 @@ const App: React.FC = () => {
           onLoadAnalysis={handleLoadAnalysis}
         />
       )}
+
+      <AnalysisConsole
+        isOpen={isAnalyzing}
+        onComplete={() => setIsAnalyzing(false)}
+        title={analysisType === 'cost' ? 'Cost Optimization Engine' : 'Security Vulnerability Scanner'}
+      />
     </div>
   );
 };
