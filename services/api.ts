@@ -1,4 +1,21 @@
-const API_URL = 'http://localhost:3001/api';
+const getApiUrl = () => {
+    if (typeof window === 'undefined') return 'http://localhost:3001/api';
+
+    const hostname = window.location.hostname;
+    // If running locally, use localhost
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'http://localhost:3001/api';
+    }
+
+    // If running on Vercel or other public domain, DO NOT default to localhost
+    // This prevents the "Network Permission" prompt
+    // Instead, use relative path (expecting backend on same origin) or a configured env var
+    // If VITE_API_URL is not set, this will likely fail to connect if backend is not on same origin,
+    // but it won't trigger the security prompt.
+    return import.meta.env.VITE_API_URL || '/api';
+};
+
+const API_URL = getApiUrl();
 
 export const api = {
     login: async (username, password) => {

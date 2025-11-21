@@ -28,6 +28,7 @@ enum View {
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [isGuest, setIsGuest] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
@@ -43,8 +44,8 @@ const App: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [connectionConfig, setConnectionConfig] = useState<AzureConnectionConfig | null>(null);
 
-  if (!token) {
-    return <LoginPage onLogin={(t, r) => { setToken(t); setRole(r); }} />;
+  if (!token && !isGuest) {
+    return <LoginPage onLogin={(t, r) => { setToken(t); setRole(r); }} onGuest={() => setIsGuest(true)} />;
   }
 
   const handleGenerate = async () => {
@@ -162,7 +163,6 @@ const App: React.FC = () => {
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
           </button>
         </nav>
-        {/* Add Logout/Admin to Sidebar bottom? Or Header? Header is better for now */}
       </aside>
 
       {/* Main Content */}
@@ -171,6 +171,7 @@ const App: React.FC = () => {
         <header className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <h1 className="font-bold text-xl text-white tracking-tight">Azure<span className="text-blue-500">Glance</span></h1>
+            {isGuest && <span className="text-xs bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700">Guest Mode</span>}
 
             {isConnected ? (
               <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${topologyData.isSimulated ? 'bg-amber-900/20 border-amber-800' : 'bg-green-900/20 border-green-800'}`}>
@@ -191,20 +192,30 @@ const App: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4 flex-1 justify-end">
-            <button onClick={() => setIsHistoryModalOpen(true)} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium text-slate-300 transition-colors flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              History
-            </button>
-            {role === 'admin' && (
-              <button onClick={() => setIsAdminPanelOpen(true)} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium text-slate-300 transition-colors">
-                Admin
+            {!isGuest && (
+              <>
+                <button onClick={() => setIsHistoryModalOpen(true)} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium text-slate-300 transition-colors flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  History
+                </button>
+                {role === 'admin' && (
+                  <button onClick={() => setIsAdminPanelOpen(true)} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium text-slate-300 transition-colors">
+                    Admin
+                  </button>
+                )}
+                <button onClick={() => { setToken(null); setRole(null); }} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium text-slate-300 transition-colors">
+                  Logout
+                </button>
+              </>
+            )}
+
+            {isGuest && (
+              <button onClick={() => setIsGuest(false)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition-colors">
+                Login
               </button>
             )}
-            <button onClick={() => { setToken(null); setRole(null); }} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium text-slate-300 transition-colors">
-              Logout
-            </button>
 
             {!isConnected && (
               <button

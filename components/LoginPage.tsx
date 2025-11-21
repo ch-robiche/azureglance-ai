@@ -3,9 +3,10 @@ import { api } from '../services/api';
 
 interface LoginPageProps {
     onLogin: (token: string, role: string) => void;
+    onGuest: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onGuest }) => {
     const [isRegistering, setIsRegistering] = useState(false);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -70,10 +71,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                     </button>
                 </form>
 
-                <div className="mt-4 text-center">
+                <div className="mt-4 space-y-3 text-center">
+                    <button
+                        onClick={onGuest}
+                        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded font-medium transition-colors border border-slate-700"
+                    >
+                        Continue as Guest (Demo Mode)
+                    </button>
+
                     <button
                         onClick={() => setIsRegistering(!isRegistering)}
-                        className="text-sm text-slate-400 hover:text-white transition-colors"
+                        className="text-sm text-slate-400 hover:text-white transition-colors block w-full"
                     >
                         {isRegistering ? 'Already have an account? Login' : "Don't have an account? Register"}
                     </button>
