@@ -1,16 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { AzureConnectionConfig } from '../types';
-import { api } from '../services/api';
+import { storage } from '../services/storage';
 
 interface ConnectModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConnect: (config: AzureConnectionConfig) => Promise<void>;
-  token: string | null;
 }
 
-const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose, onConnect, token }) => {
+const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose, onConnect }) => {
   const [config, setConfig] = useState<AzureConnectionConfig>({
     tenantId: '',
     clientId: '',
@@ -21,22 +20,24 @@ const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose, onConnect,
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [savedCredentials, setSavedCredentials] = useState<any[]>([]);
+  const [savedCredentials, setSavedCredentials] = useState<AzureConnectionConfig[]>([]);
 
   useEffect(() => {
-    if (isOpen && token) {
-      api.getCredentials(token).then(setSavedCredentials).catch(console.error);
+    if (isOpen) {
+      const creds = storage.getCredentials();
+      setSavedCredentials(creds);
     }
-  }, [isOpen, token]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSelectCredential = async (id: number) => {
-    if (!token) return;
+  const handleSelectCredential = async (id: string) => {
     setLoading(true);
     setError('');
     try {
-      const cred = await api.getCredential(token, id);
+      const cred = savedCredentials.find(c => c.id === id);
+      if (!cred) throw new Error('Credential not found');
+
       await onConnect({
         tenantId: cred.tenantId,
         clientId: cred.clientId,
@@ -107,7 +108,7 @@ const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose, onConnect,
                 {savedCredentials.map(cred => (
                   <button
                     key={cred.id}
-                    onClick={() => handleSelectCredential(cred.id)}
+                    onClick={() => cred.id && handleSelectCredential(cred.id)}
                     disabled={loading}
                     className="w-full text-left p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors flex justify-between items-center group"
                   >

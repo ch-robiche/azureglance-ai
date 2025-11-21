@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { api } from '../services/api';
 
 interface LoginPageProps {
-    onLogin: (token: string, role: string) => void;
-    onGuest: () => void;
+    onLogin: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onGuest }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     const [isRegistering, setIsRegistering] = useState(false);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -15,17 +13,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onGuest }) => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        try {
-            if (isRegistering) {
-                await api.register(username, password);
-                setIsRegistering(false);
-                alert('Registration successful! Please login.');
-            } else {
-                const { token, role } = await api.login(username, password);
-                onLogin(token, role);
-            }
-        } catch (err) {
-            setError('Authentication failed. Please check your credentials.');
+
+        const adminUser = import.meta.env.VITE_ADMIN_USERNAME || 'admin';
+        const adminPass = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
+
+        if (username === adminUser && password === adminPass) {
+            onLogin();
+        } else {
+            setError('Invalid credentials.');
         }
     };
 
@@ -71,17 +66,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onGuest }) => {
                     </button>
                 </form>
 
-                <div className="mt-4 space-y-3 text-center">
-                    <button
-                        onClick={onGuest}
-                        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded font-medium transition-colors border border-slate-700"
-                    >
-                        Continue as Guest (Demo Mode)
-                    </button>
-
+                <div className="mt-4 text-center">
                     <button
                         onClick={() => setIsRegistering(!isRegistering)}
-                        className="text-sm text-slate-400 hover:text-white transition-colors block w-full"
+                        className="text-sm text-slate-400 hover:text-white transition-colors"
                     >
                         {isRegistering ? 'Already have an account? Login' : "Don't have an account? Register"}
                     </button>

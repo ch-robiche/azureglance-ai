@@ -91,6 +91,8 @@ export interface Alert {
 }
 
 export interface AzureConnectionConfig {
+  id?: string;
+  name?: string;
   tenantId: string;
   clientId: string;
   clientSecret: string;
